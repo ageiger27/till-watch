@@ -1,0 +1,50 @@
+name: Daily TillWatch
+
+# Fires each morning and checks the prior business day. Exact-minute delivery
+# doesn't matter for this report, so plain GitHub cron is fine even though it
+# can run 30 min - 4 h late (shared queue). 11:00 UTC = 4:00 AM PT.
+on:
+  schedule:
+    - cron: "0 11 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (print emails, don't send)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+jobs:
+  tillwatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install --with-deps chromium
+
+      - name: Run TillWatch
+        env:
+          # Per-company portal credentials (prefix matches
+          # credentials_env_prefix in companies/<name>.json)
+          GEIGER_DC01_USERNAME: ${{ secrets.GEIGER_DC01_USERNAME }}
+          GEIGER_DC01_PASSWORD: ${{ secrets.GEIGER_DC01_PASSWORD }}
+          # Email sending
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          FAILURE_RECIPIENT: ${{ secrets.FAILURE_RECIPIENT }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: python main.py

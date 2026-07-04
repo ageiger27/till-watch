@@ -1,0 +1,87 @@
+# TillWatch
+
+Flags Burger King restaurants that **opened late** or **closed early**, based
+on till (cash drawer) activity in PAR Data Central — and stays silent when
+everything is fine.
+
+Every morning it pulls the prior business day's **"Tills: Earliest Open /
+Latest Close"** report, compares each store's first till open and last till
+close against its posted hours, and emails the company's list **only if
+something was flagged**. A scrape failure sends a separate FAILED email, so
+silence always means "all clear", never "the bot died".
+
+Multi-franchisee: each company (must be a PAR Ops customer) is one JSON file
+in `companies/` plus two GitHub secrets.
+
+## How it works
+
+1. GitHub Actions cron fires daily at 11:00 UTC (~4 AM PT; GH cron can run
+   late, which is fine for a by-breakfast report)
+2. `src/portal.py` logs into the company's portal with Playwright, then
+   replicates the report's own API calls (`prepare` → `openReport` →
+   `getBuildStatus` → `getPage`) — no viewer scraping, no Excel export. The
+   report pages come back as JSON "bricks" that we reconstruct into rows.
+3. `src/analyze.py` aggregates drawer rows to per-store earliest open / latest
+   close (times before 4 AM count as past-midnight of the same business day)
+   and compares against the store's hours for that weekday, with a grace
+   period (default 15 min). Stores missing from the report entirely are
+   flagged **NO TILL DATA** — the worst case.
+4. `src/emailer.py` sends the exception digest via Gmail SMTP. No flags → no
+   email (the all-clear is only in the Actions log).
+
+## Flags
+
+| Flag | Meaning |
+|---|---|
+| LATE OPEN | First till opened more than `grace_minutes` after posted open |
+| EARLY CLOSE | Last till closed more than `grace_minutes` before posted close |
+| NO TILL DATA | Store absent from the report — likely never opened |
+
+## Onboarding a franchisee
+
+1. Create `companies/<name>.json` (copy `geiger-management.json`):
+   - `portal` — their portal slug (e.g. `portal1234`); must be a PAR Ops customer on dc01.rmdatacentral.com
+   - `report_id` / `group_id` — open the "Tills: Earliest Open / Latest Close"
+     report in their portal; the report id is in the URL
+     (`/feed/allreports/reportdetail/<report_id>`), and the group id appears in
+     the `@GroupID` parameter after applying filters (or capture the
+     `prepare` request in DevTools)
+   - `credentials_env_prefix` — e.g. `SMITH`
+   - `recipients`, `grace_minutes`, and per-store `hours` (seed from their
+     Google listings, then have the franchisee confirm)
+2. Add repo secrets `<PREFIX>_DC01_USERNAME` / `<PREFIX>_DC01_PASSWORD` and
+   matching `env:` lines in `.github/workflows/daily.yml`.
+
+### Store hours config
+
+```json
+"hours": {
+  "mon": {"open": "06:00", "close": "23:00"},
+  "fri": {"open": "06:00", "close": "00:00"},   // close past midnight is fine
+  "sun": "closed",                               // or null — skipped that day
+  "sat": "24h"                                   // 24-hour: never flagged
+}
+```
+
+Holiday hours: edit the store's hours for that weekday the day before (or
+accept the false flag and ignore it).
+
+## Secrets (GitHub → Settings → Secrets → Actions)
+
+| Secret | Value |
+|---|---|
+| `GEIGER_DC01_USERNAME` / `GEIGER_DC01_PASSWORD` | PAR portal login |
+| `GMAIL_USER` / `GMAIL_APP_PASSWORD` | Sending account (App Password, not the real password) |
+| `FAILURE_RECIPIENT` | Who gets FAILED emails (the operator) |
+
+## Local testing
+
+```powershell
+$env:GEIGER_DC01_USERNAME = "..."
+$env:GEIGER_DC01_PASSWORD = "..."
+$env:DRY_RUN = "true"          # print emails instead of sending
+python main.py
+```
+
+Or run the workflow manually: Actions → Daily TillWatch → Run workflow with
+`dry_run = true`.
