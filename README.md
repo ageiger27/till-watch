@@ -37,6 +37,18 @@ in `companies/` plus two GitHub secrets.
 | EARLY CLOSE | Last till closed more than `grace_minutes` before posted close |
 | NO TILL DATA | Store absent from the report — likely never opened |
 
+### Manager attribution
+
+When a LATE OPEN or EARLY CLOSE is flagged, the bot also pulls the
+**"Payroll - Daily Time Card Review w/ Totals"** report (same API flow) and
+names the manager on duty: the first clock-in (opening) or last clock-out
+(closing) among employees whose job title matches `manager_titles`
+(default: Hourly General Manager / Assistant Mgr). It appears as a line under
+the flag in the email. Attribution is best-effort — if the timecard pull
+fails, the alert still goes out without it. The timecard report is only
+fetched on days with flags, and only group-wide (the portal rejects
+single-unit payroll requests with a rights error, oddly).
+
 ## Onboarding a franchisee
 
 1. Create `companies/<name>.json` (copy `geiger-management.json`):
@@ -46,6 +58,9 @@ in `companies/` plus two GitHub secrets.
      (`/feed/allreports/reportdetail/<report_id>`), and the group id appears in
      the `@GroupID` parameter after applying filters (or capture the
      `prepare` request in DevTools)
+   - `timecard_report_id` — same idea with "Payroll - Daily Time Card Review
+     w/ Totals" (5-Payroll category); omit it to skip manager attribution.
+     Their portal login must have payroll viewing rights.
    - `credentials_env_prefix` — e.g. `SMITH`
    - `recipients`, `grace_minutes`, and per-store `hours` (seed from their
      Google listings, then have the franchisee confirm)

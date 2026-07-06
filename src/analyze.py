@@ -18,11 +18,13 @@ class ConfigError(ValueError):
 
 
 def _parse_report_time(text: str) -> int | None:
-    """'06:28:27 AM' -> minutes since business-day midnight (rollover-adjusted)."""
+    """'06:28:27 AM' or '5:05 PM' -> minutes since business-day midnight
+    (times before the rollover hour count as next-day)."""
     text = text.strip()
     if not text:
         return None
-    dt = datetime.strptime(text, "%I:%M:%S %p")
+    fmt = "%I:%M:%S %p" if text.count(":") == 2 else "%I:%M %p"
+    dt = datetime.strptime(text, fmt)
     minutes = dt.hour * 60 + dt.minute
     if dt.hour < DAY_ROLLOVER_HOUR:
         minutes += 24 * 60
@@ -138,3 +140,58 @@ def evaluate_company(company: dict, till_rows: list[dict],
                          f"store in config (id {num})")
 
     return flags, notes
+
+
+# ---------------------------------------------------------------------------
+# Manager attribution (from the Daily Time Card Review report)
+# ---------------------------------------------------------------------------
+
+DEFAULT_MANAGER_TITLES = ["hourly general manager", "assistant mgr",
+                          "assistant manager"]
+
+
+def _is_manager(title: str, manager_titles: list[str]) -> bool:
+    t = title.strip().lower()
+    return any(m in t or t in m for m in manager_titles if m)
+
+
+def attach_managers(flags: list[dict], shifts: list[dict],
+                    company: dict) -> None:
+    """For each LATE OPEN / EARLY CLOSE flag, name the opening manager
+    (first manager clock-in) or closing manager (last manager clock-out).
+
+    Mutates each flag: adds 'manager' (display string) when found.
+    """
+    manager_titles = [m.lower() for m in
+                      company.get("manager_titles", DEFAULT_MANAGER_TITLES)]
+
+    # store number -> manager shifts with parsed minutes
+    by_store: dict[str, list[dict]] = {}
+    for s in shifts:
+        num = store_number(s["unit_name"])
+        if num is None or not _is_manager(s.get("title", ""), manager_titles):
+            continue
+        by_store.setdefault(num, []).append({
+            **s,
+            "in_min": _parse_report_time(s.get("clock_in", "")),
+            "out_min": _parse_report_time(s.get("clock_out", "")),
+        })
+
+    for flag in flags:
+        mgr_shifts = by_store.get(str(flag["store"]), [])
+        if flag["issue"] == "LATE OPEN":
+            candidates = [s for s in mgr_shifts if s["in_min"] is not None]
+            if candidates:
+                s = min(candidates, key=lambda x: x["in_min"])
+                flag["manager"] = (f"Opening: {s['employee']} ({s['title']}) — "
+                                   f"clocked in {fmt_minutes(s['in_min'])}")
+            else:
+                flag["manager"] = "Opening: no HGM/AM punch found"
+        elif flag["issue"] == "EARLY CLOSE":
+            candidates = [s for s in mgr_shifts if s["out_min"] is not None]
+            if candidates:
+                s = max(candidates, key=lambda x: x["out_min"])
+                flag["manager"] = (f"Closing: {s['employee']} ({s['title']}) — "
+                                   f"clocked out {fmt_minutes(s['out_min'])}")
+            else:
+                flag["manager"] = "Closing: no HGM/AM punch found"

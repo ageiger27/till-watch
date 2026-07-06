@@ -57,17 +57,25 @@ def build_flags_email(company: dict, flags: list[dict],
     for f in flags:
         color = ISSUE_COLORS.get(f["issue"], "#D62300")
         off = f" ({f['minutes_off']} min)" if f.get("minutes_off") else ""
+        manager_html = ""
+        if f.get("manager"):
+            manager_html = f"""
+        <tr>
+          <td colspan="4" style="padding:2px 10px 10px;border-bottom:1px solid #eee;
+              font-size:12px;color:#555;">&#128100; {f['manager']}</td>
+        </tr>"""
+        border = "none" if manager_html else "1px solid #eee"
         rows_html += f"""
         <tr>
-          <td style="padding:10px;border-bottom:1px solid #eee;">
+          <td style="padding:10px;border-bottom:{border};">
             <b>#{f['store']}</b><br>
             <span style="font-size:12px;color:#666;">{f['name']}</span></td>
-          <td style="padding:10px;border-bottom:1px solid #eee;text-align:center;
+          <td style="padding:10px;border-bottom:{border};text-align:center;
               font-weight:bold;color:{color};">{f['issue']}{off}</td>
-          <td style="padding:10px;border-bottom:1px solid #eee;text-align:center;">{f['expected']}</td>
-          <td style="padding:10px;border-bottom:1px solid #eee;text-align:center;
+          <td style="padding:10px;border-bottom:{border};text-align:center;">{f['expected']}</td>
+          <td style="padding:10px;border-bottom:{border};text-align:center;
               font-weight:bold;">{f['actual']}</td>
-        </tr>"""
+        </tr>{manager_html}"""
 
     grace = company.get("grace_minutes", 15)
     html = f"""

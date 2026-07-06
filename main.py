@@ -15,10 +15,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from src.analyze import evaluate_company, fmt_minutes, aggregate_units
+from src.analyze import (attach_managers, evaluate_company, fmt_minutes,
+                         aggregate_units)
 from src.emailer import (DRY_RUN, GMAIL_USER, GMAIL_APP_PASSWORD,
                          build_failure_email, build_flags_email, send_email)
-from src.portal import fetch_till_rows
+from src.portal import PortalSession
 
 COMPANIES_DIR = Path(__file__).parent / "companies"
 FAILURE_RECIPIENT = os.environ.get("FAILURE_RECIPIENT") or os.environ.get("RECIPIENT_EMAIL")
@@ -53,17 +54,32 @@ def process_company(company: dict) -> bool:
 
     try:
         user, password = credentials_for(company)
-        till_rows = fetch_till_rows(company, user, password, business_date)
-        print(f"  report rows: {len(till_rows)}")
-        units = aggregate_units(till_rows)
-        for num in sorted(units, key=lambda n: int(n)):
-            u = units[num]
-            eo = fmt_minutes(u["earliest_open"]) if u["earliest_open"] is not None else "—"
-            lc = fmt_minutes(u["latest_close"]) if u["latest_close"] is not None else "—"
-            print(f"    {num:>6}: open {eo:>9}  close {lc:>9}")
-        flags, notes = evaluate_company(company, till_rows, business_date)
-        for note in notes:
-            print(f"  NOTE: {note}")
+        with PortalSession(company, user, password) as portal:
+            till_rows = portal.fetch_till_rows(business_date)
+            print(f"  report rows: {len(till_rows)}")
+            units = aggregate_units(till_rows)
+            for num in sorted(units, key=lambda n: int(n)):
+                u = units[num]
+                eo = fmt_minutes(u["earliest_open"]) if u["earliest_open"] is not None else "—"
+                lc = fmt_minutes(u["latest_close"]) if u["latest_close"] is not None else "—"
+                print(f"    {num:>6}: open {eo:>9}  close {lc:>9}")
+            flags, notes = evaluate_company(company, till_rows, business_date)
+            for note in notes:
+                print(f"  NOTE: {note}")
+
+            # Manager attribution: only worth a (slow) group-wide timecard
+            # pull when a late-open/early-close flag needs a name on it.
+            if (company.get("timecard_report_id")
+                    and any(f["issue"] in ("LATE OPEN", "EARLY CLOSE")
+                            for f in flags)):
+                print("  pulling timecards for manager attribution...")
+                try:
+                    shifts = portal.fetch_timecard_shifts(business_date)
+                    print(f"  timecard shifts: {len(shifts)}")
+                    attach_managers(flags, shifts, company)
+                except Exception as e:
+                    # attribution is best-effort — never sink the alert itself
+                    print(f"  manager attribution failed (alert still sent): {e}")
     except Exception:
         err = traceback.format_exc()
         print(f"  FAILED:\n{err}")
@@ -83,6 +99,8 @@ def process_company(company: dict) -> bool:
     for f in flags:
         print(f"    #{f['store']} {f['issue']}: expected {f['expected']}, "
               f"actual {f['actual']}")
+        if f.get("manager"):
+            print(f"      {f['manager']}")
     subject, html = build_flags_email(company, flags, business_date)
     recipients = company.get("recipients") or ([FAILURE_RECIPIENT] if FAILURE_RECIPIENT else [])
     for recipient in recipients:

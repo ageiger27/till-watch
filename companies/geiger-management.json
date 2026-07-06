@@ -3,6 +3,8 @@
   "portal": "portal1315",
   "credentials_env_prefix": "GEIGER",
   "report_id": "282820ce-d731-468f-a261-80670b100970",
+  "timecard_report_id": "cfb2db70-32ad-4023-b016-c9c95fea9a25",
+  "manager_titles": ["Hourly General Manager", "Assistant Mgr", "Assistant Manager"],
   "group_id": "c00ec040-4a77-4134-967e-df45a477ea83",
   "timezone": "America/Los_Angeles",
   "recipients": [
