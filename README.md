@@ -78,8 +78,18 @@ single-unit payroll requests with a rights error, oddly).
 }
 ```
 
-Holiday hours: edit the store's hours for that weekday the day before (or
-accept the false flag and ignore it).
+### Live hours from bk.com
+
+With `"live_hours": true` (and `lat`/`lng` per store), the bot pulls each
+store's current hours from the bk.com locator backend (RBI GraphQL, no API
+key) every night and uses those instead of config — so holiday hours or a
+hood-cleaning early close entered in the BK/RBI system are honored
+automatically. Config hours are the fallback for any store the lookup
+misses, and the email footer says which source was used.
+
+One timing caveat: the check runs the **morning after** the business day
+(~4 AM PT). An hours adjustment must still be posted at that moment to
+count — don't revert a holiday's special hours until after the morning run.
 
 ## Secrets (GitHub → Settings → Secrets → Actions)
 
