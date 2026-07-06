@@ -79,6 +79,12 @@ def build_flags_email(company: dict, flags: list[dict],
 
     grace = company.get("grace_minutes", 15)
     close_grace = company.get("close_grace_minutes", 0)
+    live_used = company.get("_live_hours_used")
+    n_stores = len(company.get("stores", []))
+    if live_used:
+        hours_src = f"Hours: live from bk.com ({live_used}/{n_stores} stores)"
+    else:
+        hours_src = "Hours: from config"
     html = f"""
 <!DOCTYPE html>
 <html>
@@ -114,7 +120,8 @@ def build_flags_email(company: dict, flags: list[dict],
     {rows_html}
   </table>
   <div class="footer">
-    Grace: {grace} min open / {close_grace} min close &bull; Times are local to each store &bull;
+    Grace: {grace} min open / {close_grace} min close &bull; {hours_src} &bull;
+    Times are local to each store &bull;
     Questions or unsubscribe: {SERVICE_CONTACT}
   </div>
 </body>

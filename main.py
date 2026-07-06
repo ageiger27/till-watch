@@ -15,10 +15,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from src.analyze import (attach_managers, evaluate_company, fmt_minutes,
-                         aggregate_units)
+from src.analyze import (WEEKDAY_KEYS, attach_managers, evaluate_company,
+                         fmt_minutes, aggregate_units)
 from src.emailer import (DRY_RUN, GMAIL_USER, GMAIL_APP_PASSWORD,
                          build_failure_email, build_flags_email, send_email)
+from src.hours import fetch_live_hours
 from src.portal import PortalSession
 
 COMPANIES_DIR = Path(__file__).parent / "companies"
@@ -45,6 +46,38 @@ def credentials_for(company: dict) -> tuple[str, str]:
     return user, password
 
 
+def apply_live_hours(company: dict, business_date) -> None:
+    """Overlay current bk.com hours onto the config (config = fallback).
+
+    Hours edits made in the BK/RBI system (holidays, hood-cleaning nights)
+    flow to the bk.com locator, so checking live prevents false flags —
+    provided the adjusted hours are still posted when this runs (the
+    morning after the business day)."""
+    if not company.get("live_hours"):
+        return
+    day_key = WEEKDAY_KEYS[business_date.weekday()]
+    try:
+        live = fetch_live_hours(company["stores"])
+    except Exception as e:
+        print(f"  live hours lookup failed entirely ({e}) — using config hours")
+        return
+    used = 0
+    for store in company["stores"]:
+        sid = str(store["id"])
+        if sid not in live:
+            print(f"  #{sid}: not found on bk.com locator — using config hours")
+            continue
+        config_day = (store.get("hours") or {}).get(day_key)
+        live_day = live[sid].get(day_key)
+        if live_day != config_day:
+            print(f"  #{sid}: live hours differ from config for {day_key}: "
+                  f"live {live_day} vs config {config_day}")
+        store["hours"] = live[sid]
+        used += 1
+    company["_live_hours_used"] = used
+    print(f"  hours: live from bk.com for {used}/{len(company['stores'])} stores")
+
+
 def process_company(company: dict) -> bool:
     """Returns True on success (regardless of flags), False on failure."""
     name = company["name"]
@@ -53,6 +86,7 @@ def process_company(company: dict) -> bool:
     print(f"\n--- {name}: business day {business_date.isoformat()} ---")
 
     try:
+        apply_live_hours(company, business_date)
         user, password = credentials_for(company)
         with PortalSession(company, user, password) as portal:
             till_rows = portal.fetch_till_rows(business_date)

@@ -4,7 +4,11 @@
   "credentials_env_prefix": "GEIGER",
   "report_id": "282820ce-d731-468f-a261-80670b100970",
   "timecard_report_id": "cfb2db70-32ad-4023-b016-c9c95fea9a25",
-  "manager_titles": ["Hourly General Manager", "Assistant Mgr", "Assistant Manager"],
+  "manager_titles": [
+    "Hourly General Manager",
+    "Assistant Mgr",
+    "Assistant Manager"
+  ],
   "group_id": "c00ec040-4a77-4134-967e-df45a477ea83",
   "timezone": "America/Los_Angeles",
   "recipients": [
@@ -47,7 +51,9 @@
           "open": "06:00",
           "close": "00:00"
         }
-      }
+      },
+      "lat": 36.3291,
+      "lng": -119.6521
     },
     {
       "id": "2671",
@@ -83,7 +89,9 @@
           "open": "06:00",
           "close": "00:00"
         }
-      }
+      },
+      "lat": 36.9988,
+      "lng": -120.8469
     },
     {
       "id": "3023",
@@ -119,7 +127,9 @@
           "open": "06:00",
           "close": "22:00"
         }
-      }
+      },
+      "lat": 36.9613,
+      "lng": -120.0607
     },
     {
       "id": "3383",
@@ -155,7 +165,9 @@
           "open": "06:00",
           "close": "23:00"
         }
-      }
+      },
+      "lat": 36.0652,
+      "lng": -119.0418
     },
     {
       "id": "13959",
@@ -191,7 +203,9 @@
           "open": "06:00",
           "close": "00:00"
         }
-      }
+      },
+      "lat": 36.0551,
+      "lng": -119.0168
     },
     {
       "id": "17563",
@@ -227,7 +241,9 @@
           "open": "06:00",
           "close": "23:00"
         }
-      }
+      },
+      "lat": 36.2077,
+      "lng": -119.3393
     },
     {
       "id": "24037",
@@ -263,7 +279,9 @@
           "open": "06:00",
           "close": "00:00"
         }
-      }
+      },
+      "lat": 36.3371,
+      "lng": -119.2921
     },
     {
       "id": "25546",
@@ -299,7 +317,9 @@
           "open": "06:00",
           "close": "23:00"
         }
-      }
+      },
+      "lat": 36.3388,
+      "lng": -119.6578
     },
     {
       "id": "31007",
@@ -335,7 +355,9 @@
           "open": "06:00",
           "close": "23:00"
         }
-      }
+      },
+      "lat": 36.3502,
+      "lng": -119.3371
     },
     {
       "id": "5816",
@@ -371,7 +393,9 @@
           "open": "07:00",
           "close": "00:00"
         }
-      }
+      },
+      "lat": 47.7254,
+      "lng": -117.4433
     },
     {
       "id": "6130",
@@ -407,7 +431,9 @@
           "open": "06:00",
           "close": "23:00"
         }
-      }
+      },
+      "lat": 48.4112,
+      "lng": -119.5275
     },
     {
       "id": "8241",
@@ -443,7 +469,9 @@
           "open": "06:00",
           "close": "23:00"
         }
-      }
+      },
+      "lat": 47.4235,
+      "lng": -120.2967
     },
     {
       "id": "12622",
@@ -479,7 +507,9 @@
           "open": "06:00",
           "close": "00:00"
         }
-      }
+      },
+      "lat": 46.8271,
+      "lng": -119.1718
     },
     {
       "id": "21386",
@@ -515,7 +545,9 @@
           "open": "07:00",
           "close": "00:00"
         }
-      }
+      },
+      "lat": 47.7071,
+      "lng": -117.4129
     },
     {
       "id": "27290",
@@ -551,7 +583,9 @@
           "open": "06:00",
           "close": "23:00"
         }
-      }
+      },
+      "lat": 47.2321,
+      "lng": -119.8562
     },
     {
       "id": "29151",
@@ -587,7 +621,9 @@
           "open": "07:00",
           "close": "23:00"
         }
-      }
+      },
+      "lat": 47.6612,
+      "lng": -117.2114
     },
     {
       "id": "9787",
@@ -623,7 +659,9 @@
           "open": "07:00",
           "close": "22:00"
         }
-      }
+      },
+      "lat": 48.3022,
+      "lng": -116.5338
     },
     {
       "id": "18133",
@@ -659,7 +697,9 @@
           "open": "07:00",
           "close": "22:00"
         }
-      }
+      },
+      "lat": 47.7182,
+      "lng": -116.9252
     },
     {
       "id": "25516",
@@ -695,7 +735,9 @@
           "open": "07:00",
           "close": "22:00"
         }
-      }
+      },
+      "lat": 48.1763,
+      "lng": -116.9938
     },
     {
       "id": "28258",
@@ -731,7 +773,9 @@
           "open": "07:00",
           "close": "22:00"
         }
-      }
+      },
+      "lat": 47.7391,
+      "lng": -116.7801
     },
     {
       "id": "28849",
@@ -767,8 +811,11 @@
           "open": "06:30",
           "close": "22:00"
         }
-      }
+      },
+      "lat": 46.4073,
+      "lng": -117.0188
     }
   ],
-  "hours_note": "Hours seeded 2026-07-03 from bk.com store locator (lobby+drive-thru merged to widest span). Review before trusting flags; edit per-day for holidays."
+  "hours_note": "Hours seeded 2026-07-03 from bk.com store locator (lobby+drive-thru merged to widest span). Review before trusting flags; edit per-day for holidays.",
+  "live_hours": true
 }
