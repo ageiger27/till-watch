@@ -33,8 +33,8 @@ in `companies/` plus two GitHub secrets.
 
 | Flag | Meaning |
 |---|---|
-| LATE OPEN | First till opened more than `grace_minutes` after posted open |
-| EARLY CLOSE | Last till closed more than `grace_minutes` before posted close |
+| LATE OPEN | First till opened more than `grace_minutes` after posted open (default 15) |
+| EARLY CLOSE | Last till closed more than `close_grace_minutes` before posted close (default 0 — tills normally close at/after the posted close) |
 | NO TILL DATA | Store absent from the report — likely never opened |
 
 ### Manager attribution

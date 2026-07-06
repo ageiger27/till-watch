@@ -84,6 +84,9 @@ def evaluate_company(company: dict, till_rows: list[dict],
     notes: non-fatal oddities (report units not in config, etc.)
     """
     grace = int(company.get("grace_minutes", 15))
+    # Closing gets its own (stricter) grace: tills normally close at or after
+    # the posted close during closing procedures, so early is early.
+    close_grace = int(company.get("close_grace_minutes", 0))
     day_key = WEEKDAY_KEYS[business_date.weekday()]
     units = aggregate_units(till_rows)
     flags: list[dict] = []
@@ -126,7 +129,7 @@ def evaluate_company(company: dict, till_rows: list[dict],
 
         if unit["latest_close"] is not None:
             delta = expected_close - unit["latest_close"]
-            if delta > grace:
+            if delta > close_grace:
                 flags.append({
                     "store": sid, "name": label, "issue": "EARLY CLOSE",
                     "expected": fmt_minutes(expected_close),

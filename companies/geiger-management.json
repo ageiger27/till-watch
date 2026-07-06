@@ -11,6 +11,7 @@
     "ageiger@geigermgt.com"
   ],
   "grace_minutes": 15,
+  "close_grace_minutes": 0,
   "stores": [
     {
       "id": "2319",

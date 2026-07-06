@@ -78,6 +78,7 @@ def build_flags_email(company: dict, flags: list[dict],
         </tr>{manager_html}"""
 
     grace = company.get("grace_minutes", 15)
+    close_grace = company.get("close_grace_minutes", 0)
     html = f"""
 <!DOCTYPE html>
 <html>
@@ -99,7 +100,7 @@ def build_flags_email(company: dict, flags: list[dict],
 </head>
 <body>
   <div class="header">
-    <h1>&#9200; TillWatch &mdash; {name}</h1>
+    <h1>TillWatch &mdash; {name}</h1>
     <p>Business day: {_fmt_date(business_date)} &nbsp;|&nbsp;
        Based on first till open / last till close vs. posted store hours</p>
   </div>
@@ -113,7 +114,7 @@ def build_flags_email(company: dict, flags: list[dict],
     {rows_html}
   </table>
   <div class="footer">
-    Grace period: {grace} min &bull; Times are local to each store &bull;
+    Grace: {grace} min open / {close_grace} min close &bull; Times are local to each store &bull;
     Questions or unsubscribe: {SERVICE_CONTACT}
   </div>
 </body>
