@@ -158,6 +158,21 @@ def _is_manager(title: str, manager_titles: list[str]) -> bool:
     return any(m in t or t in m for m in manager_titles if m)
 
 
+def _display_name(employee: str) -> str:
+    """Report's 'CHANTHAVONG, SING (2075)' -> 'Sing Chanthavong'.
+
+    Drops the trailing employee id, reorders 'Last, First' to 'First Last',
+    and title-cases names the POS stored in all caps (mixed-case names are
+    left untouched to preserve spellings like 'De La Cruz' or 'Jr.')."""
+    name = re.sub(r"\s*\([^)]*\)\s*$", "", employee.strip())
+    if "," in name:
+        last, first = name.split(",", 1)
+        name = f"{first.strip()} {last.strip()}"
+    if name.isupper():
+        name = name.title()
+    return name
+
+
 def attach_managers(flags: list[dict], shifts: list[dict],
                     company: dict) -> None:
     """For each LATE OPEN / EARLY CLOSE flag, name the opening manager
@@ -186,7 +201,7 @@ def attach_managers(flags: list[dict], shifts: list[dict],
             candidates = [s for s in mgr_shifts if s["in_min"] is not None]
             if candidates:
                 s = min(candidates, key=lambda x: x["in_min"])
-                flag["manager"] = (f"Opening: {s['employee']} ({s['title']}) — "
+                flag["manager"] = (f"Opening: {_display_name(s['employee'])} — "
                                    f"clocked in {fmt_minutes(s['in_min'])}")
             else:
                 flag["manager"] = "Opening: no HGM/AM punch found"
@@ -194,7 +209,7 @@ def attach_managers(flags: list[dict], shifts: list[dict],
             candidates = [s for s in mgr_shifts if s["out_min"] is not None]
             if candidates:
                 s = max(candidates, key=lambda x: x["out_min"])
-                flag["manager"] = (f"Closing: {s['employee']} ({s['title']}) — "
+                flag["manager"] = (f"Closing: {_display_name(s['employee'])} — "
                                    f"clocked out {fmt_minutes(s['out_min'])}")
             else:
                 flag["manager"] = "Closing: no HGM/AM punch found"
