@@ -53,7 +53,8 @@
         }
       },
       "lat": 36.3291,
-      "lng": -119.6521
+      "lng": -119.6521,
+      "region": "california"
     },
     {
       "id": "2671",
@@ -91,7 +92,8 @@
         }
       },
       "lat": 36.9988,
-      "lng": -120.8469
+      "lng": -120.8469,
+      "region": "california"
     },
     {
       "id": "3023",
@@ -129,7 +131,8 @@
         }
       },
       "lat": 36.9613,
-      "lng": -120.0607
+      "lng": -120.0607,
+      "region": "california"
     },
     {
       "id": "3383",
@@ -167,7 +170,8 @@
         }
       },
       "lat": 36.0652,
-      "lng": -119.0418
+      "lng": -119.0418,
+      "region": "california"
     },
     {
       "id": "13959",
@@ -205,7 +209,8 @@
         }
       },
       "lat": 36.0551,
-      "lng": -119.0168
+      "lng": -119.0168,
+      "region": "california"
     },
     {
       "id": "17563",
@@ -243,7 +248,8 @@
         }
       },
       "lat": 36.2077,
-      "lng": -119.3393
+      "lng": -119.3393,
+      "region": "california"
     },
     {
       "id": "24037",
@@ -281,7 +287,8 @@
         }
       },
       "lat": 36.3371,
-      "lng": -119.2921
+      "lng": -119.2921,
+      "region": "california"
     },
     {
       "id": "25546",
@@ -319,7 +326,8 @@
         }
       },
       "lat": 36.3388,
-      "lng": -119.6578
+      "lng": -119.6578,
+      "region": "california"
     },
     {
       "id": "31007",
@@ -357,7 +365,8 @@
         }
       },
       "lat": 36.3502,
-      "lng": -119.3371
+      "lng": -119.3371,
+      "region": "california"
     },
     {
       "id": "5816",
@@ -395,7 +404,8 @@
         }
       },
       "lat": 47.7254,
-      "lng": -117.4433
+      "lng": -117.4433,
+      "region": "northwest"
     },
     {
       "id": "6130",
@@ -433,7 +443,8 @@
         }
       },
       "lat": 48.4112,
-      "lng": -119.5275
+      "lng": -119.5275,
+      "region": "northwest"
     },
     {
       "id": "8241",
@@ -471,7 +482,8 @@
         }
       },
       "lat": 47.4235,
-      "lng": -120.2967
+      "lng": -120.2967,
+      "region": "northwest"
     },
     {
       "id": "12622",
@@ -509,7 +521,8 @@
         }
       },
       "lat": 46.8271,
-      "lng": -119.1718
+      "lng": -119.1718,
+      "region": "northwest"
     },
     {
       "id": "21386",
@@ -547,7 +560,8 @@
         }
       },
       "lat": 47.7071,
-      "lng": -117.4129
+      "lng": -117.4129,
+      "region": "northwest"
     },
     {
       "id": "27290",
@@ -585,7 +599,8 @@
         }
       },
       "lat": 47.2321,
-      "lng": -119.8562
+      "lng": -119.8562,
+      "region": "northwest"
     },
     {
       "id": "29151",
@@ -623,7 +638,8 @@
         }
       },
       "lat": 47.6612,
-      "lng": -117.2114
+      "lng": -117.2114,
+      "region": "northwest"
     },
     {
       "id": "9787",
@@ -661,7 +677,8 @@
         }
       },
       "lat": 48.3022,
-      "lng": -116.5338
+      "lng": -116.5338,
+      "region": "northwest"
     },
     {
       "id": "18133",
@@ -699,7 +716,8 @@
         }
       },
       "lat": 47.7182,
-      "lng": -116.9252
+      "lng": -116.9252,
+      "region": "northwest"
     },
     {
       "id": "25516",
@@ -737,7 +755,8 @@
         }
       },
       "lat": 48.1763,
-      "lng": -116.9938
+      "lng": -116.9938,
+      "region": "northwest"
     },
     {
       "id": "28258",
@@ -775,7 +794,8 @@
         }
       },
       "lat": 47.7391,
-      "lng": -116.7801
+      "lng": -116.7801,
+      "region": "northwest"
     },
     {
       "id": "28849",
@@ -813,9 +833,20 @@
         }
       },
       "lat": 46.4073,
-      "lng": -117.0188
+      "lng": -117.0188,
+      "region": "northwest"
     }
   ],
   "hours_note": "Hours seeded 2026-07-03 from bk.com store locator (lobby+drive-thru merged to widest span). Review before trusting flags; edit per-day for holidays.",
-  "live_hours": true
+  "live_hours": true,
+  "regions": {
+    "california": {
+      "name": "California",
+      "recipients": []
+    },
+    "northwest": {
+      "name": "Northwest (WA/ID)",
+      "recipients": []
+    }
+  }
 }

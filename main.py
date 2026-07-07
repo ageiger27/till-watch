@@ -135,11 +135,35 @@ def process_company(company: dict) -> bool:
               f"actual {f['actual']}")
         if f.get("manager"):
             print(f"      {f['manager']}")
+
+    # Company-wide digest: every flag, to the company-level list
     subject, html = build_flags_email(company, flags, business_date)
     recipients = company.get("recipients") or ([FAILURE_RECIPIENT] if FAILURE_RECIPIENT else [])
     for recipient in recipients:
-        print(f"  sending to {recipient}...")
+        print(f"  sending full digest to {recipient}...")
         send_email(recipient, subject, html)
+
+    # Regional digests: only that region's flags, to that region's list.
+    # A region with no flags (or no recipients) gets nothing.
+    regions = company.get("regions") or {}
+    if regions:
+        region_of = {str(s["id"]): s.get("region") for s in company["stores"]}
+        for key, region in regions.items():
+            region_recipients = region.get("recipients") or []
+            if not region_recipients:
+                continue
+            region_flags = [f for f in flags
+                            if region_of.get(str(f["store"])) == key]
+            if not region_flags:
+                print(f"  region {key}: no flags — no email")
+                continue
+            subject, html = build_flags_email(
+                company, region_flags, business_date,
+                region_name=region.get("name", key))
+            for recipient in region_recipients:
+                print(f"  sending {region.get('name', key)} digest "
+                      f"({len(region_flags)} flags) to {recipient}...")
+                send_email(recipient, subject, html)
     return True
 
 

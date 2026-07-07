@@ -46,12 +46,15 @@ def _fmt_date(d: date) -> str:
     return f"{d.strftime('%A, %B')} {d.day}, {d.year}"
 
 
-def build_flags_email(company: dict, flags: list[dict],
-                      business_date: date) -> tuple[str, str]:
+def build_flags_email(company: dict, flags: list[dict], business_date: date,
+                      region_name: str | None = None) -> tuple[str, str]:
     name = company["name"]
+    if region_name:
+        name = f"{name} · {region_name}"
     n = len(flags)
+    region_part = f"{region_name} — " if region_name else ""
     subject = (f"TillWatch — {n} store{'s' if n != 1 else ''} flagged — "
-               f"{business_date.strftime('%b')} {business_date.day}")
+               f"{region_part}{business_date.strftime('%b')} {business_date.day}")
 
     rows_html = ""
     for f in flags:
