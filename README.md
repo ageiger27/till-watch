@@ -91,20 +91,22 @@ One timing caveat: the check runs the **morning after** the business day
 (~4 AM PT). An hours adjustment must still be posted at that moment to
 count — don't revert a holiday's special hours until after the morning run.
 
-### Mailing lists (regional routing)
+### Mailing lists
 
-Company-level `recipients` get the full digest (every flag). Optionally,
-define `regions` and tag each store with a `region` key — each region's
-`recipients` then get an email containing only their stores' flags (region
-name in the subject). A region with no flags that day gets no email.
+Company-level `recipients` get the full digest (every flag). `lists` route
+subsets: each list names an explicit set of stores and its recipients get an
+email with only those stores' flags (list name in the subject). Stores may
+appear on any number of lists; a list with no flags that day gets no email.
 
 ```json
-"regions": {
-  "california": {"name": "California", "recipients": ["ca-dm@..."]},
-  "northwest":  {"name": "Northwest (WA/ID)", "recipients": ["nw-dm@..."]}
-},
-"stores": [{"id": "2319", "region": "california", ...}]
+"lists": [
+  {"name": "California", "recipients": ["dm@..."], "stores": ["2319", "2671"]},
+  {"name": "Idaho District", "recipients": ["dm2@..."], "stores": ["9787"]}
+]
 ```
+
+With `"send_store_alerts": true`, each flagged store's own `email` also gets
+an alert with just that store's flags, so the GM hears the same morning.
 
 A recipient can also be a Google Group address — manage membership in
 Workspace admin without touching this config.

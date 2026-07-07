@@ -12,7 +12,9 @@
   "group_id": "c00ec040-4a77-4134-967e-df45a477ea83",
   "timezone": "America/Los_Angeles",
   "recipients": [
-    "ageiger@geigermgt.com"
+    "ageiger@geigermgt.com",
+    "gary@geigermgt.com",
+    "jgeigerbk@gmail.com"
   ],
   "grace_minutes": 15,
   "close_grace_minutes": 0,
@@ -54,7 +56,7 @@
       },
       "lat": 36.3291,
       "lng": -119.6521,
-      "region": "california"
+      "email": "bk2319@geigermgt.com"
     },
     {
       "id": "2671",
@@ -93,7 +95,7 @@
       },
       "lat": 36.9988,
       "lng": -120.8469,
-      "region": "california"
+      "email": "bk2671@geigermgt.com"
     },
     {
       "id": "3023",
@@ -132,7 +134,7 @@
       },
       "lat": 36.9613,
       "lng": -120.0607,
-      "region": "california"
+      "email": "bk3023@geigermgt.com"
     },
     {
       "id": "3383",
@@ -171,7 +173,7 @@
       },
       "lat": 36.0652,
       "lng": -119.0418,
-      "region": "california"
+      "email": "bk3383@geigermgt.com"
     },
     {
       "id": "13959",
@@ -210,7 +212,7 @@
       },
       "lat": 36.0551,
       "lng": -119.0168,
-      "region": "california"
+      "email": "bk13959@geigermgt.com"
     },
     {
       "id": "17563",
@@ -249,7 +251,7 @@
       },
       "lat": 36.2077,
       "lng": -119.3393,
-      "region": "california"
+      "email": "bk17563@geigermgt.com"
     },
     {
       "id": "24037",
@@ -288,7 +290,7 @@
       },
       "lat": 36.3371,
       "lng": -119.2921,
-      "region": "california"
+      "email": "bk24037@geigermgt.com"
     },
     {
       "id": "25546",
@@ -327,7 +329,7 @@
       },
       "lat": 36.3388,
       "lng": -119.6578,
-      "region": "california"
+      "email": "bk25546@geigermgt.com"
     },
     {
       "id": "31007",
@@ -366,7 +368,7 @@
       },
       "lat": 36.3502,
       "lng": -119.3371,
-      "region": "california"
+      "email": "bk31007@geigermgt.com"
     },
     {
       "id": "5816",
@@ -405,7 +407,7 @@
       },
       "lat": 47.7254,
       "lng": -117.4433,
-      "region": "northwest"
+      "email": "bk5816@geigermgt.com"
     },
     {
       "id": "6130",
@@ -444,7 +446,7 @@
       },
       "lat": 48.4112,
       "lng": -119.5275,
-      "region": "northwest"
+      "email": "bk6130@geigermgt.com"
     },
     {
       "id": "8241",
@@ -483,7 +485,7 @@
       },
       "lat": 47.4235,
       "lng": -120.2967,
-      "region": "northwest"
+      "email": "bk8241@geigermgt.com"
     },
     {
       "id": "12622",
@@ -522,7 +524,7 @@
       },
       "lat": 46.8271,
       "lng": -119.1718,
-      "region": "northwest"
+      "email": "bk12622@geigermgt.com"
     },
     {
       "id": "21386",
@@ -561,7 +563,7 @@
       },
       "lat": 47.7071,
       "lng": -117.4129,
-      "region": "northwest"
+      "email": "bk21386@geigermgt.com"
     },
     {
       "id": "27290",
@@ -600,7 +602,7 @@
       },
       "lat": 47.2321,
       "lng": -119.8562,
-      "region": "northwest"
+      "email": "bk27290@geigermgt.com"
     },
     {
       "id": "29151",
@@ -639,7 +641,7 @@
       },
       "lat": 47.6612,
       "lng": -117.2114,
-      "region": "northwest"
+      "email": "bk29151@geigermgt.com"
     },
     {
       "id": "9787",
@@ -678,7 +680,7 @@
       },
       "lat": 48.3022,
       "lng": -116.5338,
-      "region": "northwest"
+      "email": "bk9787@geigermgt.com"
     },
     {
       "id": "18133",
@@ -717,7 +719,7 @@
       },
       "lat": 47.7182,
       "lng": -116.9252,
-      "region": "northwest"
+      "email": "bk18133@geigermgt.com"
     },
     {
       "id": "25516",
@@ -756,7 +758,7 @@
       },
       "lat": 48.1763,
       "lng": -116.9938,
-      "region": "northwest"
+      "email": "bk25516@geigermgt.com"
     },
     {
       "id": "28258",
@@ -795,7 +797,7 @@
       },
       "lat": 47.7391,
       "lng": -116.7801,
-      "region": "northwest"
+      "email": "bk28258@geigermgt.com"
     },
     {
       "id": "28849",
@@ -834,19 +836,77 @@
       },
       "lat": 46.4073,
       "lng": -117.0188,
-      "region": "northwest"
+      "email": "bk28849@geigermgt.com"
     }
   ],
   "hours_note": "Hours seeded 2026-07-03 from bk.com store locator (lobby+drive-thru merged to widest span). Review before trusting flags; edit per-day for holidays.",
   "live_hours": true,
-  "regions": {
-    "california": {
+  "lists": [
+    {
       "name": "California",
-      "recipients": []
+      "recipients": [
+        "javiercorchado@comcast.net"
+      ],
+      "stores": [
+        "2319",
+        "2671",
+        "3023",
+        "3383",
+        "13959",
+        "17563",
+        "24037",
+        "25546",
+        "31007"
+      ]
     },
-    "northwest": {
-      "name": "Northwest (WA/ID)",
-      "recipients": []
+    {
+      "name": "Washington & Idaho",
+      "recipients": [
+        "gabeyoung97@gmail.com"
+      ],
+      "stores": [
+        "5816",
+        "6130",
+        "8241",
+        "12622",
+        "21386",
+        "27290",
+        "29151",
+        "9787",
+        "18133",
+        "25516",
+        "28258",
+        "28849"
+      ]
+    },
+    {
+      "name": "Washington District",
+      "recipients": [
+        "ber1611@gmail.com"
+      ],
+      "stores": [
+        "5816",
+        "6130",
+        "8241",
+        "21386",
+        "27290",
+        "29151"
+      ]
+    },
+    {
+      "name": "Idaho District",
+      "recipients": [
+        "christine@geigermgt.com"
+      ],
+      "stores": [
+        "9787",
+        "12622",
+        "18133",
+        "25516",
+        "28258",
+        "28849"
+      ]
     }
-  }
+  ],
+  "send_store_alerts": true
 }

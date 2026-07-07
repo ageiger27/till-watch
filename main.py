@@ -143,27 +143,41 @@ def process_company(company: dict) -> bool:
         print(f"  sending full digest to {recipient}...")
         send_email(recipient, subject, html)
 
-    # Regional digests: only that region's flags, to that region's list.
-    # A region with no flags (or no recipients) gets nothing.
-    regions = company.get("regions") or {}
-    if regions:
-        region_of = {str(s["id"]): s.get("region") for s in company["stores"]}
-        for key, region in regions.items():
-            region_recipients = region.get("recipients") or []
-            if not region_recipients:
+    # Named lists: each list covers an explicit set of stores (a store may
+    # appear on several lists). Recipients get only their stores' flags;
+    # a list with no flags that day gets nothing.
+    for dist in company.get("lists") or []:
+        list_recipients = dist.get("recipients") or []
+        list_stores = {str(x) for x in dist.get("stores") or []}
+        if not list_recipients or not list_stores:
+            continue
+        list_flags = [f for f in flags if str(f["store"]) in list_stores]
+        if not list_flags:
+            print(f"  list {dist.get('name')}: no flags — no email")
+            continue
+        subject, html = build_flags_email(
+            company, list_flags, business_date, region_name=dist.get("name"))
+        for recipient in list_recipients:
+            print(f"  sending {dist.get('name')} digest "
+                  f"({len(list_flags)} flags) to {recipient}...")
+            send_email(recipient, subject, html)
+
+    # Store alerts: each flagged store's own email (its GM) gets that
+    # store's flags, so the store learns the same morning.
+    if company.get("send_store_alerts"):
+        store_by_id = {str(s["id"]): s for s in company["stores"]}
+        flagged_ids = sorted({str(f["store"]) for f in flags}, key=int)
+        for sid in flagged_ids:
+            store = store_by_id.get(sid)
+            store_email = (store or {}).get("email")
+            if not store_email:
                 continue
-            region_flags = [f for f in flags
-                            if region_of.get(str(f["store"])) == key]
-            if not region_flags:
-                print(f"  region {key}: no flags — no email")
-                continue
+            store_flags = [f for f in flags if str(f["store"]) == sid]
             subject, html = build_flags_email(
-                company, region_flags, business_date,
-                region_name=region.get("name", key))
-            for recipient in region_recipients:
-                print(f"  sending {region.get('name', key)} digest "
-                      f"({len(region_flags)} flags) to {recipient}...")
-                send_email(recipient, subject, html)
+                company, store_flags, business_date,
+                region_name=store.get("name") or f"#{sid}")
+            print(f"  sending store alert to {store_email}...")
+            send_email(store_email, subject, html)
     return True
 
 
