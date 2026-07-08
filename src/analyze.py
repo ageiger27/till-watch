@@ -198,7 +198,8 @@ def _manager_shifts_by_store(shifts: list[dict],
 
 
 def evaluate_manager_arrivals(company: dict, shifts: list[dict],
-                              business_date: date) -> list[dict]:
+                              business_date: date,
+                              units: dict[str, dict] | None = None) -> list[dict]:
     """Flag stores whose first manager (HGM/AM) clock-in is after the time
     they must be in by — posted open minus manager_open_lead_minutes
     (default 0: a manager must be clocked in by open). A store can't open
@@ -227,12 +228,13 @@ def evaluate_manager_arrivals(company: dict, shifts: list[dict],
         delta = first["in_min"] - must_be_in_by
         if delta > 0:
             clock_in = first.get("clock_in") or fmt_minutes(first["in_min"])
+            # Informational: when the till still opened inside its own grace,
+            # show that first till time anyway so the row isn't blank
+            till_open = ((units or {}).get(sid) or {}).get("earliest_open_text")
             flags.append({
                 "store": sid, "name": label, "issue": "MANAGER LATE IN",
                 "expected": f"in by {fmt_minutes(must_be_in_by)}",
-                # the punch isn't till activity — it belongs on the manager
-                # line, not in the Till Activity column
-                "actual": "—",
+                "actual": f"till on {till_open}" if till_open else "—",
                 "minutes_off": round(delta, 1),
                 "manager": (f"Opening: {_display_name(first['employee'])} — "
                             f"clocked in {clock_in}"),

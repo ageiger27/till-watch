@@ -113,7 +113,7 @@ def process_company(company: dict) -> bool:
                     print(f"  timecard shifts: {len(shifts)}")
                     attach_managers(flags, shifts, company)
                     flags.extend(evaluate_manager_arrivals(
-                        company, shifts, business_date))
+                        company, shifts, business_date, units))
                     flags = condense_flags(flags)
                 except Exception as e:
                     print(f"  timecard checks failed (till alerts still sent): {e}")
