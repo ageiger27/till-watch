@@ -182,17 +182,8 @@ def _display_name(employee: str) -> str:
     return name
 
 
-def attach_managers(flags: list[dict], shifts: list[dict],
-                    company: dict) -> None:
-    """For each LATE OPEN / EARLY CLOSE flag, name the opening manager
-    (first manager clock-in) or closing manager (last manager clock-out).
-
-    Mutates each flag: adds 'manager' (display string) when found.
-    """
-    manager_titles = [m.lower() for m in
-                      company.get("manager_titles", DEFAULT_MANAGER_TITLES)]
-
-    # store number -> manager shifts with parsed minutes
+def _manager_shifts_by_store(shifts: list[dict],
+                             manager_titles: list[str]) -> dict[str, list[dict]]:
     by_store: dict[str, list[dict]] = {}
     for s in shifts:
         num = store_number(s["unit_name"])
@@ -203,6 +194,58 @@ def attach_managers(flags: list[dict], shifts: list[dict],
             "in_min": _parse_report_time(s.get("clock_in", "")),
             "out_min": _parse_report_time(s.get("clock_out", "")),
         })
+    return by_store
+
+
+def evaluate_manager_arrivals(company: dict, shifts: list[dict],
+                              business_date: date) -> list[dict]:
+    """Flag stores whose first manager (HGM/AM) clock-in is after the time
+    they must be in by — posted open minus manager_open_lead_minutes
+    (default 0: a manager must be clocked in by open). A store can't open
+    on time without a manager in the building, even if the first till still
+    lands inside the till grace period."""
+    manager_titles = [m.lower() for m in
+                      company.get("manager_titles", DEFAULT_MANAGER_TITLES)]
+    lead = int(company.get("manager_open_lead_minutes", 0))
+    day_key = WEEKDAY_KEYS[business_date.weekday()]
+    by_store = _manager_shifts_by_store(shifts, manager_titles)
+
+    flags: list[dict] = []
+    for store in company["stores"]:
+        sid = str(store["id"])
+        label = store.get("name") or store.get("address") or sid
+        hours = (store.get("hours") or {}).get(day_key)
+        if hours in (None, "closed") or hours == "24h" or store.get("open_24h"):
+            continue
+        expected_open = _parse_config_time(hours["open"])
+        must_be_in_by = expected_open - lead
+
+        punches = [s for s in by_store.get(sid, []) if s["in_min"] is not None]
+        if not punches:
+            continue  # no manager punch at all — surfaced as a note upstream
+        first = min(punches, key=lambda x: x["in_min"])
+        delta = first["in_min"] - must_be_in_by
+        if delta > 0:
+            flags.append({
+                "store": sid, "name": label, "issue": "MANAGER LATE IN",
+                "expected": f"in by {fmt_minutes(must_be_in_by)}",
+                "actual": first.get("clock_in", fmt_minutes(first["in_min"])),
+                "minutes_off": round(delta, 1),
+                "manager": f"Opening: {_display_name(first['employee'])}",
+            })
+    return flags
+
+
+def attach_managers(flags: list[dict], shifts: list[dict],
+                    company: dict) -> None:
+    """For each LATE OPEN / EARLY CLOSE flag, name the opening manager
+    (first manager clock-in) or closing manager (last manager clock-out).
+
+    Mutates each flag: adds 'manager' (display string) when found.
+    """
+    manager_titles = [m.lower() for m in
+                      company.get("manager_titles", DEFAULT_MANAGER_TITLES)]
+    by_store = _manager_shifts_by_store(shifts, manager_titles)
 
     for flag in flags:
         mgr_shifts = by_store.get(str(flag["store"]), [])

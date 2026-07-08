@@ -22,6 +22,7 @@ ISSUE_COLORS = {
     "LATE OPEN": "#D62300",
     "EARLY CLOSE": "#B54A00",
     "NO TILL DATA": "#7A0000",
+    "MANAGER LATE IN": "#8A2BE2",
 }
 
 

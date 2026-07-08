@@ -36,6 +36,7 @@ in `companies/` plus two GitHub secrets.
 | LATE OPEN | First till opened more than `grace_minutes` after posted open (default 15) |
 | EARLY CLOSE | Last till closed more than `close_grace_minutes` before posted close (default 0 — tills normally close at/after the posted close) |
 | NO TILL DATA | Store absent from the report — likely never opened |
+| MANAGER LATE IN | First manager (HGM/AM) clock-in later than posted open minus `manager_open_lead_minutes` (default 0: a manager must be punched in by open) — catches mornings the tills can't, since a store can't open without a manager |
 
 ### Manager attribution
 

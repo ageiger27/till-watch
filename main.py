@@ -16,7 +16,8 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from src.analyze import (WEEKDAY_KEYS, attach_managers, evaluate_company,
-                         fmt_minutes, aggregate_units)
+                         evaluate_manager_arrivals, fmt_minutes,
+                         aggregate_units)
 from src.emailer import (DRY_RUN, GMAIL_USER, GMAIL_APP_PASSWORD,
                          build_failure_email, build_flags_email, send_email)
 from src.hours import fetch_live_hours
@@ -101,19 +102,20 @@ def process_company(company: dict) -> bool:
             for note in notes:
                 print(f"  NOTE: {note}")
 
-            # Manager attribution: only worth a (slow) group-wide timecard
-            # pull when a late-open/early-close flag needs a name on it.
-            if (company.get("timecard_report_id")
-                    and any(f["issue"] in ("LATE OPEN", "EARLY CLOSE")
-                            for f in flags)):
-                print("  pulling timecards for manager attribution...")
+            # Timecards are pulled every night: manager arrival is its own
+            # check (a manager clocking in after open can't be caught by till
+            # activity), plus attribution on till flags. Best-effort — a
+            # failed pull never sinks the till alerts.
+            if company.get("timecard_report_id"):
+                print("  pulling timecards...")
                 try:
                     shifts = portal.fetch_timecard_shifts(business_date)
                     print(f"  timecard shifts: {len(shifts)}")
                     attach_managers(flags, shifts, company)
+                    flags.extend(evaluate_manager_arrivals(
+                        company, shifts, business_date))
                 except Exception as e:
-                    # attribution is best-effort — never sink the alert itself
-                    print(f"  manager attribution failed (alert still sent): {e}")
+                    print(f"  timecard checks failed (till alerts still sent): {e}")
     except Exception:
         err = traceback.format_exc()
         print(f"  FAILED:\n{err}")
