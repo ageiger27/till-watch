@@ -15,9 +15,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from src.analyze import (WEEKDAY_KEYS, attach_managers, evaluate_company,
-                         evaluate_manager_arrivals, fmt_minutes,
-                         aggregate_units)
+from src.analyze import (WEEKDAY_KEYS, attach_managers, condense_flags,
+                         evaluate_company, evaluate_manager_arrivals,
+                         fmt_minutes, aggregate_units)
 from src.emailer import (DRY_RUN, GMAIL_USER, GMAIL_APP_PASSWORD,
                          build_failure_email, build_flags_email, send_email)
 from src.hours import fetch_live_hours
@@ -114,6 +114,7 @@ def process_company(company: dict) -> bool:
                     attach_managers(flags, shifts, company)
                     flags.extend(evaluate_manager_arrivals(
                         company, shifts, business_date))
+                    flags = condense_flags(flags)
                 except Exception as e:
                     print(f"  timecard checks failed (till alerts still sent): {e}")
     except Exception:

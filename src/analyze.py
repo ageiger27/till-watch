@@ -240,6 +240,31 @@ def evaluate_manager_arrivals(company: dict, shifts: list[dict],
     return flags
 
 
+def _off_text(minutes: float) -> str:
+    return "under 1 min" if minutes < 1 else f"{minutes:g} min"
+
+
+def condense_flags(flags: list[dict]) -> list[dict]:
+    """Merge a store's LATE OPEN + MANAGER LATE IN into a single row —
+    they're one story: the manager arrived late, so the till opened late.
+    The till columns keep the LATE OPEN facts; the combined label carries
+    both deltas; the manager line carries the punch and the in-by bar."""
+    mgr_late = {f["store"]: f for f in flags if f["issue"] == "MANAGER LATE IN"}
+    merged_stores = set()
+    for f in flags:
+        if f["issue"] != "LATE OPEN" or f["store"] not in mgr_late:
+            continue
+        m = mgr_late[f["store"]]
+        f["issue"] = (f"LATE OPEN ({_off_text(f['minutes_off'])}) "
+                      f"+ MGR LATE IN ({_off_text(m['minutes_off'])})")
+        f["minutes_off"] = None  # deltas are already in the label
+        f["manager"] = f"{m['manager']}, needed {m['expected']}"
+        merged_stores.add(f["store"])
+    return [f for f in flags
+            if not (f["issue"] == "MANAGER LATE IN"
+                    and f["store"] in merged_stores)]
+
+
 def attach_managers(flags: list[dict], shifts: list[dict],
                     company: dict) -> None:
     """For each LATE OPEN / EARLY CLOSE flag, name the opening manager
