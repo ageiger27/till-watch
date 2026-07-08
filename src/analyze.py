@@ -226,12 +226,16 @@ def evaluate_manager_arrivals(company: dict, shifts: list[dict],
         first = min(punches, key=lambda x: x["in_min"])
         delta = first["in_min"] - must_be_in_by
         if delta > 0:
+            clock_in = first.get("clock_in") or fmt_minutes(first["in_min"])
             flags.append({
                 "store": sid, "name": label, "issue": "MANAGER LATE IN",
                 "expected": f"in by {fmt_minutes(must_be_in_by)}",
-                "actual": first.get("clock_in", fmt_minutes(first["in_min"])),
+                # the punch isn't till activity — it belongs on the manager
+                # line, not in the Till Activity column
+                "actual": "—",
                 "minutes_off": round(delta, 1),
-                "manager": f"Opening: {_display_name(first['employee'])}",
+                "manager": (f"Opening: {_display_name(first['employee'])} — "
+                            f"clocked in {clock_in}"),
             })
     return flags
 
