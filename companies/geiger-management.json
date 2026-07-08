@@ -18,7 +18,7 @@
   ],
   "grace_minutes": 15,
   "close_grace_minutes": 0,
-  "manager_open_lead_minutes": 0,
+  "manager_open_lead_minutes": 30,
   "stores": [
     {
       "id": "2319",
