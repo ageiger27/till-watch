@@ -17,15 +17,19 @@ class ConfigError(ValueError):
     pass
 
 
-def _parse_report_time(text: str) -> int | None:
+def _parse_report_time(text: str) -> float | None:
     """'06:28:27 AM' or '5:05 PM' -> minutes since business-day midnight
-    (times before the rollover hour count as next-day)."""
+    (times before the rollover hour count as next-day).
+
+    Seconds count as fractional minutes — 6:15:08 against a 6:00 open with
+    15 min grace IS more than 15 minutes late. Truncating seconds once let
+    a store slip under the grace bar by 8 seconds."""
     text = text.strip()
     if not text:
         return None
     fmt = "%I:%M:%S %p" if text.count(":") == 2 else "%I:%M %p"
     dt = datetime.strptime(text, fmt)
-    minutes = dt.hour * 60 + dt.minute
+    minutes = dt.hour * 60 + dt.minute + dt.second / 60
     if dt.hour < DAY_ROLLOVER_HOUR:
         minutes += 24 * 60
     return minutes
@@ -42,9 +46,9 @@ def _parse_config_time(text: str, *, is_close: bool = False) -> int:
     return minutes
 
 
-def fmt_minutes(minutes: int) -> str:
+def fmt_minutes(minutes: float) -> str:
     """Minutes since midnight -> '6:28 AM' (or '12:03 AM' for past-midnight)."""
-    minutes %= 24 * 60
+    minutes = int(minutes) % (24 * 60)
     h, m = divmod(minutes, 60)
     suffix = "AM" if h < 12 else "PM"
     h12 = h % 12 or 12
@@ -58,7 +62,9 @@ def store_number(unit_name: str) -> str | None:
 
 
 def aggregate_units(till_rows: list[dict]) -> dict[str, dict]:
-    """Raw drawer rows -> {store_number: {earliest_open, latest_close, unit_name}}."""
+    """Raw drawer rows -> {store_number: {earliest_open, latest_close,
+    earliest_open_text, latest_close_text, unit_name}}. The *_text fields
+    keep the report's exact second-level timestamps for display."""
     units: dict[str, dict] = {}
     for row in till_rows:
         num = store_number(row["unit_name"])
@@ -67,11 +73,14 @@ def aggregate_units(till_rows: list[dict]) -> dict[str, dict]:
         opened = _parse_report_time(row["opened"])
         closed = _parse_report_time(row["closed"])
         u = units.setdefault(num, {"unit_name": row["unit_name"],
-                                   "earliest_open": None, "latest_close": None})
+                                   "earliest_open": None, "latest_close": None,
+                                   "earliest_open_text": "", "latest_close_text": ""})
         if opened is not None and (u["earliest_open"] is None or opened < u["earliest_open"]):
             u["earliest_open"] = opened
+            u["earliest_open_text"] = row["opened"].strip().lstrip("0")
         if closed is not None and (u["latest_close"] is None or closed > u["latest_close"]):
             u["latest_close"] = closed
+            u["latest_close_text"] = row["closed"].strip().lstrip("0")
     return units
 
 
@@ -123,8 +132,8 @@ def evaluate_company(company: dict, till_rows: list[dict],
                 flags.append({
                     "store": sid, "name": label, "issue": "LATE OPEN",
                     "expected": fmt_minutes(expected_open),
-                    "actual": fmt_minutes(unit["earliest_open"]),
-                    "minutes_off": delta,
+                    "actual": unit["earliest_open_text"] or fmt_minutes(unit["earliest_open"]),
+                    "minutes_off": round(delta, 1),
                 })
 
         if unit["latest_close"] is not None:
@@ -133,8 +142,8 @@ def evaluate_company(company: dict, till_rows: list[dict],
                 flags.append({
                     "store": sid, "name": label, "issue": "EARLY CLOSE",
                     "expected": fmt_minutes(expected_close),
-                    "actual": fmt_minutes(unit["latest_close"]),
-                    "minutes_off": delta,
+                    "actual": unit["latest_close_text"] or fmt_minutes(unit["latest_close"]),
+                    "minutes_off": round(delta, 1),
                 })
 
     for num, unit in units.items():

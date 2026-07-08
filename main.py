@@ -131,7 +131,9 @@ def process_company(company: dict) -> bool:
 
     print(f"  {len(flags)} flag(s):")
     for f in flags:
-        print(f"    #{f['store']} {f['issue']}: expected {f['expected']}, "
+        mins = f.get("minutes_off")
+        off = "" if mins is None else (" (under 1 min)" if mins < 1 else f" ({mins:g} min)")
+        print(f"    #{f['store']} {f['issue']}{off}: expected {f['expected']}, "
               f"actual {f['actual']}")
         if f.get("manager"):
             print(f"      {f['manager']}")

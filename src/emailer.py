@@ -59,7 +59,10 @@ def build_flags_email(company: dict, flags: list[dict], business_date: date,
     rows_html = ""
     for f in flags:
         color = ISSUE_COLORS.get(f["issue"], "#D62300")
-        off = f" ({f['minutes_off']} min)" if f.get("minutes_off") else ""
+        off = ""
+        if f.get("minutes_off") is not None:
+            mins = f["minutes_off"]
+            off = " (under 1 min)" if mins < 1 else f" ({mins:g} min)"
         manager_html = ""
         if f.get("manager"):
             manager_html = f"""
