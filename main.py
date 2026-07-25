@@ -10,6 +10,7 @@ period), and email the company's list ONLY if something was flagged.
 import json
 import os
 import sys
+import time
 import traceback
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -25,6 +26,20 @@ from src.portal import PortalSession
 
 COMPANIES_DIR = Path(__file__).parent / "companies"
 FAILURE_RECIPIENT = os.environ.get("FAILURE_RECIPIENT") or os.environ.get("RECIPIENT_EMAIL")
+
+# Stores' POS systems post till data to PAR on their own schedule — a store
+# can be absent from the report at 4 AM and present an hour later. When an
+# expected-open store is missing, wait and re-pull instead of sending a
+# phantom NO TILL DATA flag.
+RETRY_WAIT_MINUTES = int(os.environ.get("RETRY_WAIT_MINUTES", "20"))
+MAX_DATA_RETRIES = int(os.environ.get("MAX_DATA_RETRIES", "3"))
+
+
+def expected_store_ids(company: dict, business_date) -> set[str]:
+    """Stores that should show till activity that day (not marked closed)."""
+    day_key = WEEKDAY_KEYS[business_date.weekday()]
+    return {str(s["id"]) for s in company["stores"]
+            if (s.get("hours") or {}).get(day_key) not in (None, "closed")}
 
 
 def load_companies() -> list[dict]:
@@ -91,6 +106,16 @@ def process_company(company: dict) -> bool:
         user, password = credentials_for(company)
         with PortalSession(company, user, password) as portal:
             till_rows = portal.fetch_till_rows(business_date)
+            expected = expected_store_ids(company, business_date)
+            for attempt in range(1, MAX_DATA_RETRIES + 1):
+                missing = expected - set(aggregate_units(till_rows))
+                if not missing:
+                    break
+                print(f"  no till data yet for {sorted(missing, key=int)} — "
+                      f"waiting {RETRY_WAIT_MINUTES} min for PAR to catch up "
+                      f"(retry {attempt}/{MAX_DATA_RETRIES})")
+                time.sleep(RETRY_WAIT_MINUTES * 60)
+                till_rows = portal.fetch_till_rows(business_date)
             print(f"  report rows: {len(till_rows)}")
             units = aggregate_units(till_rows)
             for num in sorted(units, key=lambda n: int(n)):

@@ -20,7 +20,9 @@ on:
 jobs:
   tillwatch:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # generous: when a store's POS posts till data late, the run waits and
+    # re-pulls (up to 3 retries x 20 min) before trusting NO TILL DATA
+    timeout-minutes: 90
 
     steps:
       - name: Check out repo
