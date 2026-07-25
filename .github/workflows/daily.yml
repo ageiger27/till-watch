@@ -2,10 +2,12 @@ name: Daily TillWatch
 
 # Fires each morning and checks the prior business day. Exact-minute delivery
 # doesn't matter for this report, so plain GitHub cron is fine even though it
-# can run 30 min - 4 h late (shared queue). 11:00 UTC = 4:00 AM PT.
+# can run 30 min - 4 h late (shared queue). 12:00 UTC = 5:00 AM PT — late
+# enough that most stores' POS data has posted, so the missing-data retry
+# loop rarely has to wait.
 on:
   schedule:
-    - cron: "0 11 * * *"
+    - cron: "0 12 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
