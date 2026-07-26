@@ -137,6 +137,15 @@ class PortalSession:
         self._pw = sync_playwright().start()
         self._browser = self._pw.chromium.launch(headless=self.headless)
         self._ctx = self._browser.new_context()
+        self._login()
+        return self
+
+    def __exit__(self, *exc):
+        self._browser.close()
+        self._pw.stop()
+        return False
+
+    def _login(self):
         page = self._ctx.new_page()
         page.set_default_timeout(LOGIN_TIMEOUT_MS)
         page.set_default_navigation_timeout(LOGIN_TIMEOUT_MS)
@@ -145,15 +154,24 @@ class PortalSession:
         page.get_by_role("textbox", name="Enter password").fill(self.password)
         page.get_by_role("button", name="Sign In").click()
         page.wait_for_url(lambda url: "login" not in url)
+        page.close()
         self._rq = self._ctx.request
-        return self
-
-    def __exit__(self, *exc):
-        self._browser.close()
-        self._pw.stop()
-        return False
 
     def fetch_report_pages(self, report_id: str, report_date: date) -> list[dict]:
+        """Like _fetch_report_pages, but survives session expiry: the portal
+        cookie dies after ~an hour idle (seen when the missing-data retry
+        loop waited 60 min and the next prepare got HTTP 401), so on a 401
+        we log in again and retry once."""
+        try:
+            return self._fetch_report_pages(report_id, report_date)
+        except PortalError as e:
+            if "HTTP 401" not in str(e):
+                raise
+            print("  portal session expired — logging in again")
+            self._login()
+            return self._fetch_report_pages(report_id, report_date)
+
+    def _fetch_report_pages(self, report_id: str, report_date: date) -> list[dict]:
         """prepare -> openReport -> getBuildStatus -> getPage*: brick pages."""
         d = report_date.strftime("%Y-%m-%dT00:00:00")
         tzoffset = _tzoffset_hours(
