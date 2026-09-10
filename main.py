@@ -16,11 +16,13 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from src.analyze import (WEEKDAY_KEYS, attach_managers, condense_flags,
-                         evaluate_company, evaluate_manager_arrivals,
-                         fmt_minutes, aggregate_units)
+from src.analyze import (WEEKDAY_KEYS, _parse_report_time, attach_managers,
+                         condense_flags, evaluate_company,
+                         evaluate_manager_arrivals, fmt_minutes,
+                         aggregate_units, store_number)
 from src.emailer import (DRY_RUN, GMAIL_USER, GMAIL_APP_PASSWORD,
-                         build_failure_email, build_flags_email, send_email)
+                         build_failure_email, build_flags_email,
+                         build_timecard_failure_email, send_email)
 from src.hours import fetch_live_hours
 from src.portal import PortalSession
 
@@ -141,7 +143,17 @@ def process_company(company: dict) -> bool:
                         company, shifts, business_date, units))
                     flags = condense_flags(flags)
                 except Exception as e:
-                    print(f"  timecard checks failed (till alerts still sent): {e}")
+                    err = f"{type(e).__name__}: {str(e).splitlines()[0][:300]}"
+                    print(f"  timecard checks failed (till alerts still sent): {err}")
+                    # Heads-up to the operator only: a silent skip here hid a
+                    # week of failures in Sep 2026.
+                    if FAILURE_RECIPIENT:
+                        subject, html = build_timecard_failure_email(
+                            name, business_date, err, len(flags))
+                        try:
+                            send_email(FAILURE_RECIPIENT, subject, html)
+                        except Exception as e2:
+                            print(f"  also failed to send timecard heads-up: {e2}")
     except Exception:
         err = traceback.format_exc()
         print(f"  FAILED:\n{err}")
@@ -211,7 +223,70 @@ def process_company(company: dict) -> bool:
     return True
 
 
+def backfill_timecards(business_date, store_id: str | None) -> bool:
+    """`python main.py --timecards YYYY-MM-DD [--store N]`: re-pull the
+    timecards for a past business day and print what the nightly run would
+    have reported — every shift for a single store, or the manager punches
+    and any MANAGER LATE IN flags for the whole company. Print only, never
+    emails. Uses config hours (bk.com only serves current hours)."""
+    ok = True
+    for company in load_companies():
+        if not company.get("timecard_report_id"):
+            continue
+        name = company["name"]
+        ids = {str(s["id"]) for s in company["stores"]}
+        if store_id and store_id not in ids:
+            continue
+        print(f"\n--- {name}: timecards for {business_date.isoformat()}"
+              f"{' — store #' + store_id if store_id else ''} ---")
+        try:
+            user, password = credentials_for(company)
+            with PortalSession(company, user, password) as portal:
+                shifts = portal.fetch_timecard_shifts(
+                    business_date, {store_id} if store_id else None)
+        except Exception:
+            print(f"  FAILED:\n{traceback.format_exc()}")
+            ok = False
+            continue
+        print(f"  timecard shifts: {len(shifts)}")
+
+        manager_titles = [m.lower() for m in company.get("manager_titles", [])]
+        by_store: dict[str, list[dict]] = {}
+        for s in shifts:
+            by_store.setdefault(store_number(s["unit_name"]) or "?", []).append(s)
+        for sid in sorted(by_store, key=lambda n: int(n) if n.isdigit() else 0):
+            rows = by_store[sid]
+            if not store_id:  # company-wide: managers only, keep it readable
+                rows = [r for r in rows
+                        if any(m in r["title"].lower() for m in manager_titles)]
+            print(f"  #{sid}:")
+            for r in sorted(rows, key=lambda r: _parse_report_time(r["clock_in"]) or 0):
+                print(f"    {r['clock_in']:>9} - {r['clock_out'] or '—':>9}  "
+                      f"{r['title']:<26} {r['employee']}")
+
+        late = evaluate_manager_arrivals(company, shifts, business_date)
+        if store_id:
+            late = [f for f in late if str(f["store"]) == store_id]
+        if late:
+            print(f"  {len(late)} MANAGER LATE IN flag(s):")
+            for f in late:
+                print(f"    #{f['store']} expected {f['expected']}: {f['manager']}")
+        else:
+            print("  no MANAGER LATE IN flags")
+    return ok
+
+
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--timecards":
+        if len(sys.argv) < 3:
+            print("usage: python main.py --timecards YYYY-MM-DD [--store N]")
+            sys.exit(2)
+        business_date = datetime.strptime(sys.argv[2], "%Y-%m-%d").date()
+        store_id = None
+        if "--store" in sys.argv:
+            store_id = sys.argv[sys.argv.index("--store") + 1]
+        sys.exit(0 if backfill_timecards(business_date, store_id) else 1)
+
     if not DRY_RUN and (not GMAIL_USER or not GMAIL_APP_PASSWORD):
         print("ERROR: GMAIL_USER and GMAIL_APP_PASSWORD must be set (or DRY_RUN=true).")
         sys.exit(1)

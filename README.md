@@ -46,9 +46,25 @@ names the manager on duty: the first clock-in (opening) or last clock-out
 (closing) among employees whose job title matches `manager_titles`
 (default: Hourly General Manager / Assistant Mgr). It appears as a line under
 the flag in the email. Attribution is best-effort — if the timecard pull
-fails, the alert still goes out without it. The timecard report is only
-fetched on days with flags, and only group-wide (the portal rejects
-single-unit payroll requests with a rights error, oddly).
+fails, the alert still goes out without it, and the operator
+(`FAILURE_RECIPIENT`) gets a "timecards FAILED" heads-up.
+
+The timecard report is pulled every night, group-wide first (one build).
+Since early Sep 2026 that build often exceeds the 5-minute cap, so on a
+timeout the bot falls back to one pull per store using each store's
+`unit_id` (~25 s each). The `unit_id` is the portal's `@UnitID` for that
+unit — pick the store in the report's Filters panel and read it from the
+URL.
+
+### Backfilling timecards
+
+If a night's timecard pull failed, re-run it for that day (print only, no
+email):
+
+```powershell
+python main.py --timecards 2026-09-09                # manager punches, all stores
+python main.py --timecards 2026-09-09 --store 3023   # every shift at one store
+```
 
 ## Onboarding a franchisee
 

@@ -137,6 +137,25 @@ def build_flags_email(company: dict, flags: list[dict], business_date: date,
     return subject, html
 
 
+def build_timecard_failure_email(company_name: str, business_date: date,
+                                 error: str, flag_count: int) -> tuple[str, str]:
+    """Operator heads-up when the timecard pull fails. The till alerts still
+    went out (or all-clear stood), but manager attribution and the
+    MANAGER LATE IN check were skipped for the day."""
+    subject = (f"TillWatch timecards FAILED — {company_name} — "
+               f"{business_date.strftime('%b')} {business_date.day}")
+    till_line = (f"{flag_count} till flag(s) were sent without manager names."
+                 if flag_count else
+                 "Till data was all clear, so no flag email was sent.")
+    html = (f"<p>TillWatch could not pull the timecard report for "
+            f"<b>{company_name}</b> (business day {business_date.isoformat()}), "
+            f"so the MANAGER LATE IN check did not run. {till_line}</p>"
+            f"<p>Backfill later with "
+            f"<code>python main.py --timecards {business_date.isoformat()}</code>.</p>"
+            f"<pre>{error}</pre>")
+    return subject, html
+
+
 def build_failure_email(company_name: str, business_date: date,
                         error: str) -> tuple[str, str]:
     subject = (f"TillWatch FAILED — {company_name} — "

@@ -22,11 +22,14 @@ Everything else is plain HTTP via the logged-in browser context's cookies.
 Two reports are used:
   - company["report_id"]           Tills: Earliest Open / Latest Close
   - company["timecard_report_id"]  Payroll - Daily Time Card Review w/ Totals
-    (only fetched when a flag needs manager attribution)
+    (pulled nightly: manager attribution + the MANAGER LATE IN check)
 
-NOTE: the timecard report's prepare rejects a specific @UnitID with
-"You do not have right to view payroll data" but accepts the group-wide
-request — so we always pull group-wide and filter locally.
+The timecard report is pulled group-wide first (one build, ~1-3 min when the
+portal is quiet). Since early Sep 2026 that build often exceeds the 5-minute
+prepare cap, so on a timeout we fall back to one pull per store using each
+store's "unit_id" (the portal's @UnitID for that unit, ~25 s each). Per-unit
+payroll requests used to be rejected with "You do not have right to view
+payroll data"; that stopped with the Aug 2026 portal redesign.
 """
 
 import json
@@ -49,6 +52,12 @@ BUILD_POLL_ATTEMPTS = 4
 
 class PortalError(RuntimeError):
     pass
+
+
+def _unit_number(unit_name: str) -> str | None:
+    """'3023 - Country Club Dr' -> '3023'."""
+    m = re.match(r"\s*(\d+)", unit_name or "")
+    return m.group(1) if m else None
 
 
 def _tzoffset_hours(tz_name: str, on_date: date) -> int:
@@ -157,29 +166,36 @@ class PortalSession:
         page.close()
         self._rq = self._ctx.request
 
-    def fetch_report_pages(self, report_id: str, report_date: date) -> list[dict]:
+    def fetch_report_pages(self, report_id: str, report_date: date,
+                           unit_id: str | None = None) -> list[dict]:
         """Like _fetch_report_pages, but survives session expiry: the portal
         cookie dies after ~an hour idle (seen when the missing-data retry
         loop waited 60 min and the next prepare got HTTP 401), so on a 401
         we log in again and retry once."""
         try:
-            return self._fetch_report_pages(report_id, report_date)
+            return self._fetch_report_pages(report_id, report_date, unit_id)
         except PortalError as e:
             if "HTTP 401" not in str(e):
                 raise
             print("  portal session expired — logging in again")
             self._login()
-            return self._fetch_report_pages(report_id, report_date)
+            return self._fetch_report_pages(report_id, report_date, unit_id)
 
-    def _fetch_report_pages(self, report_id: str, report_date: date) -> list[dict]:
-        """prepare -> openReport -> getBuildStatus -> getPage*: brick pages."""
+    def _fetch_report_pages(self, report_id: str, report_date: date,
+                            unit_id: str | None = None) -> list[dict]:
+        """prepare -> openReport -> getBuildStatus -> getPage*: brick pages.
+
+        Group-wide by default; with ``unit_id`` the report is scoped to that
+        one unit (@GroupID becomes "null", exactly what the portal sends when
+        a single unit is chosen in the Filters panel)."""
         d = report_date.strftime("%Y-%m-%dT00:00:00")
         tzoffset = _tzoffset_hours(
             self.company.get("timezone", "America/Los_Angeles"), report_date)
 
+        scope = ({"@UnitID": str(unit_id), "@GroupID": "null"} if unit_id
+                 else {"@UnitID": "null", "@GroupID": self.company["group_id"]})
         prep = self._rq.post(f"{self.api}/Reports/{report_id}/prepare", data={
-            "@FromDate": d, "@ThruDate": d, "@UnitID": "null",
-            "@GroupID": self.company["group_id"], "phone": "false",
+            "@FromDate": d, "@ThruDate": d, **scope, "phone": "false",
             "tzoffset": tzoffset,
         }, timeout=PREPARE_TIMEOUT_MS)
         result_id = _result(prep, "prepare")["ResultID"]
@@ -244,11 +260,60 @@ class PortalSession:
 
     # -- Payroll - Daily Time Card Review w/ Totals --------------------------
 
-    def fetch_timecard_shifts(self, report_date: date) -> list[dict]:
-        """Raw shift rows: {unit_name, employee, title, clock_in, clock_out}."""
-        pages = self.fetch_report_pages(
-            self.company["timecard_report_id"], report_date)
-        return _parse_timecard_pages(pages)
+    def fetch_timecard_shifts(self, report_date: date,
+                              store_ids: set[str] | None = None) -> list[dict]:
+        """Raw shift rows: {unit_name, employee, title, clock_in, clock_out}.
+
+        Tries the single group-wide build first. If that times out (or the
+        portal errors), falls back to one pull per store that has a
+        ``unit_id`` in the config — slower in total but each request is
+        small enough to finish. ``store_ids`` limits the fallback (and the
+        result) to those stores; None means every store."""
+        report_id = self.company["timecard_report_id"]
+        wanted = {str(s) for s in store_ids} if store_ids else None
+        stores = [s for s in self.company["stores"]
+                  if s.get("unit_id") and (not wanted or str(s["id"]) in wanted)]
+
+        # A targeted pull of a few stores (backfill) is faster per-store than
+        # waiting on the group-wide build — skip straight to the fallback.
+        targeted = bool(wanted) and len(stores) == len(wanted) and len(wanted) <= 5
+        if not targeted:
+            try:
+                pages = self.fetch_report_pages(report_id, report_date)
+                shifts = _parse_timecard_pages(pages)
+                if wanted:
+                    shifts = [s for s in shifts
+                              if _unit_number(s["unit_name"]) in wanted]
+                return shifts
+            except Exception as e:
+                print(f"  group-wide timecard pull failed ({type(e).__name__}: "
+                      f"{str(e).splitlines()[0][:120]}) — "
+                      f"falling back to per-store pulls")
+
+        if not stores:
+            raise PortalError("timecard fallback needs a unit_id per store in "
+                              "the company config; none configured")
+        shifts: list[dict] = []
+        failed: list[str] = []
+        for store in stores:
+            sid = str(store["id"])
+            try:
+                pages = self.fetch_report_pages(report_id, report_date,
+                                                unit_id=store["unit_id"])
+                got = _parse_timecard_pages(pages)
+                print(f"    #{sid}: {len(got)} shifts")
+                shifts.extend(got)
+            except Exception as e:
+                failed.append(sid)
+                print(f"    #{sid}: timecard pull failed "
+                      f"({type(e).__name__}: {str(e).splitlines()[0][:120]})")
+        if failed and len(failed) == len(stores):
+            raise PortalError(
+                f"per-store timecard pulls failed for every store ({len(failed)})")
+        if failed:
+            print(f"  timecards missing for {len(failed)} store(s): "
+                  f"{', '.join(failed)}")
+        return shifts
 
 
 # ---------------------------------------------------------------------------

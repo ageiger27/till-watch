@@ -22,6 +22,7 @@
   "stores": [
     {
       "id": "2319",
+      "unit_id": "1134",
       "name": "Hanford — W Lacey Blvd",
       "address": "301 W Lacey Blvd, Hanford, CA 93230",
       "timezone": "America/Los_Angeles",
@@ -61,6 +62,7 @@
     },
     {
       "id": "2671",
+      "unit_id": "1154",
       "name": "Los Banos — E Pacheco Blvd",
       "address": "525 E Pacheco Blvd, Los Banos, CA 93635",
       "timezone": "America/Los_Angeles",
@@ -100,6 +102,7 @@
     },
     {
       "id": "3023",
+      "unit_id": "1135",
       "name": "Madera — Country Club Dr",
       "address": "1103 Country Club Dr, Madera, CA 93638",
       "timezone": "America/Los_Angeles",
@@ -139,6 +142,7 @@
     },
     {
       "id": "3383",
+      "unit_id": "1136",
       "name": "Porterville — W Henderson Ave",
       "address": "1092 W Henderson Ave, Porterville, CA 93257",
       "timezone": "America/Los_Angeles",
@@ -178,6 +182,7 @@
     },
     {
       "id": "13959",
+      "unit_id": "1137",
       "name": "Porterville — S Jaye St",
       "address": "820 S Jaye St, Porterville, CA 93257",
       "timezone": "America/Los_Angeles",
@@ -217,6 +222,7 @@
     },
     {
       "id": "17563",
+      "unit_id": "1138",
       "name": "Tulare — E Bardsley Ave",
       "address": "601 E Bardsley Ave, Tulare, CA 93274",
       "timezone": "America/Los_Angeles",
@@ -256,6 +262,7 @@
     },
     {
       "id": "24037",
+      "unit_id": "1146",
       "name": "Visalia — N Ben Maddox Way",
       "address": "1009 N Ben Maddox Way, Visalia, CA 93292",
       "timezone": "America/Los_Angeles",
@@ -295,6 +302,7 @@
     },
     {
       "id": "25546",
+      "unit_id": "1147",
       "name": "Hanford — N 11th Ave",
       "address": "2567 N 11th Ave, Hanford, CA 93230",
       "timezone": "America/Los_Angeles",
@@ -334,6 +342,7 @@
     },
     {
       "id": "31007",
+      "unit_id": "1148",
       "name": "Visalia — W Riggin Ave",
       "address": "2012 W Riggin Ave, Visalia, CA 93291",
       "timezone": "America/Los_Angeles",
@@ -373,6 +382,7 @@
     },
     {
       "id": "5816",
+      "unit_id": "1139",
       "name": "Spokane — W Francis Ave",
       "address": "1806 W Francis Ave, Spokane, WA 99205",
       "timezone": "America/Los_Angeles",
@@ -412,6 +422,7 @@
     },
     {
       "id": "6130",
+      "unit_id": "1140",
       "name": "Omak — Omache Dr",
       "address": "601 Omache Dr, Omak, WA 98841",
       "timezone": "America/Los_Angeles",
@@ -451,6 +462,7 @@
     },
     {
       "id": "8241",
+      "unit_id": "1141",
       "name": "East Wenatchee — Grant Rd",
       "address": "610 Grant Rd, East Wenatchee, WA 98802",
       "timezone": "America/Los_Angeles",
@@ -490,6 +502,7 @@
     },
     {
       "id": "12622",
+      "unit_id": "1143",
       "name": "Othello — E Columbia St",
       "address": "150 E Columbia St, Othello, WA 99344",
       "timezone": "America/Los_Angeles",
@@ -529,6 +542,7 @@
     },
     {
       "id": "21386",
+      "unit_id": "1145",
       "name": "Spokane — N Division St",
       "address": "4320 N Division St, Spokane, WA 99207",
       "timezone": "America/Los_Angeles",
@@ -568,6 +582,7 @@
     },
     {
       "id": "27290",
+      "unit_id": "1150",
       "name": "Quincy — 13th Ave SW",
       "address": "716 13th Ave SW Suite C, Quincy, WA 98848",
       "timezone": "America/Los_Angeles",
@@ -607,6 +622,7 @@
     },
     {
       "id": "29151",
+      "unit_id": "1153",
       "name": "Spokane Valley — E Sprague Ave",
       "address": "10818 E Sprague Ave, Spokane Valley, WA 99206",
       "timezone": "America/Los_Angeles",
@@ -646,6 +662,7 @@
     },
     {
       "id": "9787",
+      "unit_id": "1142",
       "name": "Ponderay — Hwy 95 N",
       "address": "476997 Hwy 95 N, Ponderay, ID 83852",
       "timezone": "America/Los_Angeles",
@@ -685,6 +702,7 @@
     },
     {
       "id": "18133",
+      "unit_id": "1144",
       "name": "Post Falls — E Mullan Ave",
       "address": "2956 East Mullan Ave, Post Falls, ID 83854",
       "timezone": "America/Los_Angeles",
@@ -724,6 +742,7 @@
     },
     {
       "id": "25516",
+      "unit_id": "1149",
       "name": "Oldtown — E 4th St",
       "address": "201 East 4th St, Oldtown, ID 83822",
       "timezone": "America/Los_Angeles",
@@ -763,6 +782,7 @@
     },
     {
       "id": "28258",
+      "unit_id": "1151",
       "name": "Coeur d'Alene — N Ramsey Rd",
       "address": "3827 N Ramsey Rd, Coeur d'Alene, ID 83815",
       "timezone": "America/Los_Angeles",
@@ -802,6 +822,7 @@
     },
     {
       "id": "28849",
+      "unit_id": "1152",
       "name": "Lewiston — Thain Rd",
       "address": "223 Thain Rd, Lewiston, ID 83501",
       "timezone": "America/Los_Angeles",
