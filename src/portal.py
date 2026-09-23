@@ -19,9 +19,13 @@ viewer itself makes — discovered by capturing network traffic:
 Only the login itself touches the UI (the login form is simple and stable).
 Everything else is plain HTTP via the logged-in browser context's cookies.
 
-Two reports are used:
-  - company["report_id"]           Tills: Earliest Open / Latest Close
-  - company["timecard_report_id"]  Payroll - Daily Time Card Review w/ Totals
+Three reports are used:
+  - company["report_id"]              Tills: Earliest Open / Latest Close
+  - company["till_history_report_id"] Till History (optional) — every drawer
+    session with its own open/close time. Pulled nightly as an independent
+    cross-check: on 2026-09-22 the Earliest/Latest report showed #13959
+    closing at 6:08 PM while Till History had a drawer open until 12:02 AM.
+  - company["timecard_report_id"]     Payroll - Daily Time Card Review w/ Totals
     (pulled nightly: manager attribution + the MANAGER LATE IN check)
 
 The timecard report is pulled group-wide first (one build, ~1-3 min when the
@@ -258,6 +262,17 @@ class PortalSession:
         pages = self.fetch_report_pages(self.company["report_id"], report_date)
         return _parse_till_pages(pages)
 
+    # -- Till History --------------------------------------------------------
+
+    def fetch_till_history_rows(self, report_date: date) -> list[dict]:
+        """Every drawer session on the Till History report, in the same row
+        shape as fetch_till_rows (times without seconds: '6:08 PM'). This is
+        the independent source the cross-check compares against; needs
+        company["till_history_report_id"]."""
+        pages = self.fetch_report_pages(
+            self.company["till_history_report_id"], report_date)
+        return _parse_till_history_pages(pages, report_date)
+
     # -- Payroll - Daily Time Card Review w/ Totals --------------------------
 
     def fetch_timecard_shifts(self, report_date: date,
@@ -366,6 +381,98 @@ def _parse_till_pages(pages: list[dict]) -> list[dict]:
                 "employee": mapped.get("Employee Name", ""),
             })
     return till_rows
+
+
+# ---------------------------------------------------------------------------
+# Till History report parsing
+# ---------------------------------------------------------------------------
+
+_ANY_TIME_RE = re.compile(r"^\d{1,2}:\d{2}(?::\d{2})? [AP]M$")
+_DATE_RE = re.compile(r"^\d{1,2}/\d{1,2}/\d{2,4}$")
+_UNIT_HEADER_RE = re.compile(r"^\d+\s*-\s*\S")   # '13959 - S Jaye St'
+_COLUMN_SNAP_PX = 60  # a cell belongs to a column if within this of its header
+
+
+def _parse_history_date(text: str) -> date | None:
+    for fmt in ("%m/%d/%Y", "%m/%d/%y"):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            pass
+    return None
+
+
+def _parse_till_history_pages(pages: list[dict],
+                              report_date: date | None = None) -> list[dict]:
+    """Layout rules (observed on the report's PDF export):
+      - header row:  Employee | Drawer | Opened Time | Closed Time | Starting
+                     Bank | Cash Received | ... (repeats per unit / page);
+                     the Opened/Closed header x-positions anchor the columns
+      - unit header: lone cell '13959 - S Jaye St'
+      - date header: lone cell '9/22/2026' (business date of the rows below)
+      - drawer row:  employee, drawer (blank for an unnamed till), opened,
+                     closed, money columns
+      - totals row:  money cells only, no times — skipped
+      - footer:      'Prepared by … Page N of M'
+    Rows under a date header that isn't ``report_date`` are dropped."""
+    rows_out: list[dict] = []
+    current_unit: str | None = None
+    current_date: str = ""
+    date_matches = True
+    header_lefts: dict[str, int] = {}
+    for row in _page_rows(pages):
+        texts = [c["text"].strip() for c in row]
+        if "Opened Time" in texts and "Closed Time" in texts:
+            header_lefts = {c["text"].strip(): c["left"] for c in row}
+            continue
+        if any(t.startswith("Prepared by") or ("Page " in t and " of " in t)
+               for t in texts):
+            continue
+        times = [c for c in row if _ANY_TIME_RE.match(c["text"].strip())]
+        if not times:
+            for t in texts:
+                if _UNIT_HEADER_RE.match(t):
+                    current_unit = t
+                elif _DATE_RE.match(t):
+                    current_date = t
+                    parsed = _parse_history_date(t)
+                    date_matches = (report_date is None or parsed is None
+                                    or parsed == report_date)
+            continue
+        if not header_lefts or current_unit is None or not date_matches:
+            continue
+
+        def nearest(cell, names):
+            best = min(names, key=lambda n: abs(cell["left"] - header_lefts[n]))
+            return best if abs(cell["left"] - header_lefts[best]) <= _COLUMN_SNAP_PX else None
+
+        mapped: dict[str, str] = {}
+        for c in times:
+            col = nearest(c, ["Opened Time", "Closed Time"])
+            if col and col not in mapped:
+                mapped[col] = c["text"].strip()
+        text_cols = [n for n in ("Employee", "Drawer") if n in header_lefts]
+        for c in row:
+            if c in times or not c["text"].strip():
+                continue
+            if c["left"] >= header_lefts["Opened Time"] - _COLUMN_SNAP_PX:
+                continue  # money columns to the right
+            col = nearest(c, text_cols) if text_cols else None
+            if col is None and text_cols:
+                col = "Employee" if c["left"] < header_lefts.get("Drawer", 1 << 30) else "Drawer"
+            if col and col not in mapped:
+                mapped[col] = c["text"].strip()
+        if not (mapped.get("Opened Time") or mapped.get("Closed Time")):
+            continue
+        rows_out.append({
+            "unit_name": current_unit,
+            "business_date": current_date,
+            "opened": mapped.get("Opened Time", ""),
+            "closed": mapped.get("Closed Time", ""),
+            "drawer": mapped.get("Drawer", ""),
+            "employee": mapped.get("Employee", ""),
+        })
+    return rows_out
 
 
 # ---------------------------------------------------------------------------

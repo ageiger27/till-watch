@@ -92,6 +92,8 @@ def build_flags_email(company: dict, flags: list[dict], business_date: date,
         hours_src = f"Hours: live from bk.com ({live_used}/{n_stores} stores)"
     else:
         hours_src = "Hours: from config"
+    if company.get("_till_history_checked"):
+        hours_src += " &bull; Till times cross-checked against Till History"
     html = f"""
 <!DOCTYPE html>
 <html>
@@ -152,6 +154,79 @@ def build_timecard_failure_email(company_name: str, business_date: date,
             f"so the MANAGER LATE IN check did not run. {till_line}</p>"
             f"<p>Backfill later with "
             f"<code>python main.py --timecards {business_date.isoformat()}</code>.</p>"
+            f"<pre>{error}</pre>")
+    return subject, html
+
+
+def _flag_line(f: dict) -> str:
+    mins = f.get("minutes_off")
+    off = "" if mins is None else (" (under 1 min)" if mins < 1 else f" ({mins:g} min)")
+    return (f"#{f['store']} {f['issue']}{off} — expected {f['expected']}, "
+            f"till activity {f['actual']}")
+
+
+def build_cross_check_email(company_name: str, business_date: date,
+                            discrepancies: list[dict], removed: list[dict],
+                            added: list[dict]) -> tuple[str, str]:
+    """Operator heads-up when the Till History report disagrees with the
+    Earliest Open / Latest Close report. The alert already used the wider
+    window (a drawer on either report proves the store was operating), so
+    this is a record of PAR's report being wrong and of which flags that
+    changed — nobody on the store lists sees it."""
+    n = len({d["store"] for d in discrepancies})
+    subject = (f"TillWatch cross-check — {company_name} — "
+               f"{business_date.strftime('%b')} {business_date.day} — "
+               f"Till History disagrees for {n} store{'s' if n != 1 else ''}")
+    field_label = {"open": "First open", "close": "Last close",
+                   "missing": "Whole store"}
+    rows = "".join(
+        f"<tr><td style='padding:4px 10px;'><b>#{d['store']}</b> "
+        f"<span style='color:#666;'>{d['unit_name']}</span></td>"
+        f"<td style='padding:4px 10px;'>{field_label.get(d['field'], d['field'])}</td>"
+        f"<td style='padding:4px 10px;'>{d['primary']}</td>"
+        f"<td style='padding:4px 10px;'><b>{d['history']}</b></td></tr>"
+        for d in discrepancies)
+    outcome = ""
+    if removed:
+        outcome += ("<p>Flags that would have gone out on the first/last report "
+                    "alone, and were <b>not sent</b>:</p><ul>"
+                    + "".join(f"<li>{_flag_line(f)}</li>" for f in removed)
+                    + "</ul>")
+    if added:
+        outcome += ("<p>Flags that exist <b>only because of</b> Till History "
+                    "(store was missing from the first/last report):</p><ul>"
+                    + "".join(f"<li>{_flag_line(f)}</li>" for f in added)
+                    + "</ul>")
+    if not removed and not added:
+        outcome = "<p>No flag changed as a result.</p>"
+    html = (f"<p>For <b>{company_name}</b>, business day "
+            f"{business_date.isoformat()}, the <i>Tills: Earliest Open / Latest "
+            f"Close</i> report disagreed with <i>Till History</i>. TillWatch "
+            f"used the wider window (Till History value in bold).</p>"
+            f"<table style='border-collapse:collapse;font-size:13px;'>"
+            f"<tr><th style='text-align:left;padding:4px 10px;'>Store</th>"
+            f"<th style='text-align:left;padding:4px 10px;'>Field</th>"
+            f"<th style='text-align:left;padding:4px 10px;'>Earliest/Latest report</th>"
+            f"<th style='text-align:left;padding:4px 10px;'>Till History</th></tr>"
+            f"{rows}</table>{outcome}")
+    return subject, html
+
+
+def build_cross_check_failure_email(company_name: str, business_date: date,
+                                    error: str, flag_count: int) -> tuple[str, str]:
+    """Operator heads-up when the Till History pull fails: the till alerts
+    went out on the Earliest/Latest report alone, unverified."""
+    subject = (f"TillWatch cross-check FAILED — {company_name} — "
+               f"{business_date.strftime('%b')} {business_date.day}")
+    till_line = (f"{flag_count} till flag(s) were sent on the first/last "
+                 f"report alone — worth eyeballing against Till History."
+                 if flag_count else
+                 "The first/last report was all clear, so no flag email was sent.")
+    html = (f"<p>TillWatch could not pull the Till History report for "
+            f"<b>{company_name}</b> (business day {business_date.isoformat()}), "
+            f"so the cross-check did not run. {till_line}</p>"
+            f"<p>Compare later with "
+            f"<code>python main.py --tills {business_date.isoformat()}</code>.</p>"
             f"<pre>{error}</pre>")
     return subject, html
 

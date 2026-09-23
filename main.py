@@ -5,6 +5,12 @@
 For each company in companies/: pull yesterday's report, compare each store's
 first till open / last till close against its posted hours (with a grace
 period), and email the company's list ONLY if something was flagged.
+
+Safeguard: the Earliest/Latest report has been wrong (2026-09-22, #13959:
+it showed a 6:08 PM close while the Till History report had a drawer open
+until 12:02 AM). When the company config has a till_history_report_id, Till
+History is pulled too and each store's window is widened to the earliest
+open / latest close on either report before anything is flagged.
 """
 
 import json
@@ -17,10 +23,12 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from src.analyze import (WEEKDAY_KEYS, _parse_report_time, attach_managers,
-                         condense_flags, evaluate_company,
-                         evaluate_manager_arrivals, fmt_minutes,
-                         aggregate_units, store_number)
+                         condense_flags, cross_check_units, diff_flags,
+                         evaluate_company, evaluate_manager_arrivals,
+                         fmt_minutes, aggregate_units, store_number)
 from src.emailer import (DRY_RUN, GMAIL_USER, GMAIL_APP_PASSWORD,
+                         build_cross_check_email,
+                         build_cross_check_failure_email,
                          build_failure_email, build_flags_email,
                          build_timecard_failure_email, send_email)
 from src.hours import fetch_live_hours
@@ -42,6 +50,28 @@ def expected_store_ids(company: dict, business_date) -> set[str]:
     day_key = WEEKDAY_KEYS[business_date.weekday()]
     return {str(s["id"]) for s in company["stores"]
             if (s.get("hours") or {}).get(day_key) not in (None, "closed")}
+
+
+def pull_till_history(portal, company: dict, business_date):
+    """Best-effort Till History pull: (rows, None) or (None, error text).
+    Skipped (None, None) when the company has no till_history_report_id."""
+    if not company.get("till_history_report_id"):
+        return None, None
+    try:
+        return portal.fetch_till_history_rows(business_date), None
+    except Exception as e:
+        err = f"{type(e).__name__}: {str(e).splitlines()[0][:300]}"
+        print(f"  till history pull failed (first/last report stands alone): {err}")
+        return None, err
+
+
+def notify_operator(subject: str, html: str) -> None:
+    if not FAILURE_RECIPIENT:
+        return
+    try:
+        send_email(FAILURE_RECIPIENT, subject, html)
+    except Exception as e:
+        print(f"  also failed to send operator heads-up: {e}")
 
 
 def load_companies() -> list[dict]:
@@ -108,9 +138,12 @@ def process_company(company: dict) -> bool:
         user, password = credentials_for(company)
         with PortalSession(company, user, password) as portal:
             till_rows = portal.fetch_till_rows(business_date)
+            history_rows, history_err = pull_till_history(portal, company, business_date)
             expected = expected_store_ids(company, business_date)
             for attempt in range(1, MAX_DATA_RETRIES + 1):
-                missing = expected - set(aggregate_units(till_rows))
+                # a store on either report has posted; only wait for the rest
+                missing = (expected - set(aggregate_units(till_rows))
+                           - set(aggregate_units(history_rows or [])))
                 if not missing:
                     break
                 print(f"  no till data yet for {sorted(missing, key=int)} — "
@@ -118,16 +151,44 @@ def process_company(company: dict) -> bool:
                       f"(retry {attempt}/{MAX_DATA_RETRIES})")
                 time.sleep(RETRY_WAIT_MINUTES * 60)
                 till_rows = portal.fetch_till_rows(business_date)
+                history_rows, history_err = pull_till_history(portal, company, business_date)
             print(f"  report rows: {len(till_rows)}")
-            units = aggregate_units(till_rows)
+            units_primary = aggregate_units(till_rows)
+            units, discrepancies = units_primary, []
+            if history_rows is not None:
+                print(f"  till history rows: {len(history_rows)}")
+                units, discrepancies = cross_check_units(
+                    units_primary, aggregate_units(history_rows))
+                company["_till_history_checked"] = True
+            changed = {d["store"] for d in discrepancies}
             for num in sorted(units, key=lambda n: int(n)):
                 u = units[num]
                 eo = fmt_minutes(u["earliest_open"]) if u["earliest_open"] is not None else "—"
                 lc = fmt_minutes(u["latest_close"]) if u["latest_close"] is not None else "—"
-                print(f"    {num:>6}: open {eo:>9}  close {lc:>9}")
-            flags, notes = evaluate_company(company, till_rows, business_date)
+                mark = "  * widened by Till History" if num in changed else ""
+                print(f"    {num:>6}: open {eo:>9}  close {lc:>9}{mark}")
+            for d in discrepancies:
+                print(f"  CROSS-CHECK: #{d['store']} {d['field']}: first/last report "
+                      f"{d['primary']}, Till History {d['history']}")
+            flags, notes = evaluate_company(company, till_rows, business_date,
+                                            units=units)
             for note in notes:
                 print(f"  NOTE: {note}")
+
+            # Operator heads-up: PAR's first/last report was wrong (and what
+            # that changed), or the safeguard couldn't run at all.
+            if discrepancies:
+                flags_primary, _ = evaluate_company(
+                    company, till_rows, business_date, units=units_primary)
+                removed, added = diff_flags(flags_primary, flags)
+                for f in removed:
+                    print(f"  cross-check prevented: #{f['store']} {f['issue']} "
+                          f"(first/last said {f['actual']})")
+                notify_operator(*build_cross_check_email(
+                    name, business_date, discrepancies, removed, added))
+            elif history_err:
+                notify_operator(*build_cross_check_failure_email(
+                    name, business_date, history_err, len(flags)))
 
             # Timecards are pulled every night: manager arrival is its own
             # check (a manager clocking in after open can't be caught by till
@@ -276,7 +337,81 @@ def backfill_timecards(business_date, store_id: str | None) -> bool:
     return ok
 
 
+def _window(u: dict | None) -> str:
+    if not u:
+        return "—".center(25)
+    eo = u["earliest_open_text"] or "—"
+    lc = u["latest_close_text"] or "—"
+    return f"{eo:>11} – {lc:<11}"
+
+
+def backfill_tills(business_date, store_id: str | None) -> bool:
+    """`python main.py --tills YYYY-MM-DD [--store N]`: pull both till
+    reports for a past business day and print them side by side, marking
+    every store where Till History disagrees with the Earliest/Latest
+    report. With --store, also lists that store's drawers from each report.
+    Print only, never emails."""
+    ok = True
+    for company in load_companies():
+        name = company["name"]
+        ids = {str(s["id"]) for s in company["stores"]}
+        if store_id and store_id not in ids:
+            continue
+        print(f"\n--- {name}: tills for {business_date.isoformat()}"
+              f"{' — store #' + store_id if store_id else ''} ---")
+        try:
+            user, password = credentials_for(company)
+            with PortalSession(company, user, password) as portal:
+                till_rows = portal.fetch_till_rows(business_date)
+                history_rows, history_err = pull_till_history(
+                    portal, company, business_date)
+        except Exception:
+            print(f"  FAILED:\n{traceback.format_exc()}")
+            ok = False
+            continue
+        if history_rows is None:
+            print("  no Till History: " + (history_err or
+                  "add till_history_report_id to the company config"))
+            ok = ok and not history_err
+        primary = aggregate_units(till_rows)
+        history = aggregate_units(history_rows or [])
+        _, discrepancies = cross_check_units(primary, history)
+        changed = {d["store"] for d in discrepancies}
+        print(f"  {'store':>7}  {'Earliest/Latest report':^25}  {'Till History':^25}")
+        for num in sorted(set(primary) | set(history), key=int):
+            if store_id and num != store_id:
+                continue
+            mark = "  <-- disagree" if num in changed else ""
+            print(f"  {num:>7}  {_window(primary.get(num))}  "
+                  f"{_window(history.get(num))}{mark}")
+        if store_id:
+            for label, rows in (("Earliest/Latest report", till_rows),
+                                ("Till History", history_rows or [])):
+                print(f"  {label} drawers:")
+                for r in rows:
+                    if store_number(r["unit_name"]) != store_id:
+                        continue
+                    print(f"    {r['opened']:>11} – {r['closed'] or '—':<11}  "
+                          f"{r['drawer']:<8} {r['employee']}")
+        for d in discrepancies:
+            if store_id and d["store"] != store_id:
+                continue
+            print(f"  CROSS-CHECK: #{d['store']} {d['field']}: first/last report "
+                  f"{d['primary']}, Till History {d['history']}")
+    return ok
+
+
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--tills":
+        if len(sys.argv) < 3:
+            print("usage: python main.py --tills YYYY-MM-DD [--store N]")
+            sys.exit(2)
+        business_date = datetime.strptime(sys.argv[2], "%Y-%m-%d").date()
+        store_id = None
+        if "--store" in sys.argv:
+            store_id = sys.argv[sys.argv.index("--store") + 1]
+        sys.exit(0 if backfill_tills(business_date, store_id) else 1)
+
     if len(sys.argv) > 1 and sys.argv[1] == "--timecards":
         if len(sys.argv) < 3:
             print("usage: python main.py --timecards YYYY-MM-DD [--store N]")

@@ -84,20 +84,95 @@ def aggregate_units(till_rows: list[dict]) -> dict[str, dict]:
     return units
 
 
+# Till History prints times without seconds ('6:08 PM'), so it can sit up to
+# a minute off the Earliest/Latest report's '06:08:14 PM' for the same
+# drawer. Only a gap bigger than that is a real disagreement.
+HISTORY_TOLERANCE_MINUTES = 1.0
+
+
+def cross_check_units(primary: dict[str, dict], history: dict[str, dict],
+                      tolerance: float = HISTORY_TOLERANCE_MINUTES,
+                      ) -> tuple[dict[str, dict], list[dict]]:
+    """Safeguard against the Earliest Open / Latest Close report being wrong.
+
+    ``primary`` and ``history`` are aggregate_units() results from the two
+    reports. A drawer on either report is proof the store was operating at
+    that time, so each store's window is widened to the earliest open and
+    latest close seen on either — but Till History only overrides when it
+    disagrees by more than ``tolerance`` minutes (it drops seconds). A store
+    present only on Till History is added, rescuing it from NO TILL DATA.
+
+    Returns (merged_units, discrepancies); each discrepancy is
+    {store, unit_name, field ('open'|'close'|'missing'), primary, history}
+    with the display texts from each report. Widening can only remove
+    flags, never add one (except LATE OPEN / EARLY CLOSE on a rescued store).
+    """
+    merged = {num: dict(u) for num, u in primary.items()}
+    discrepancies: list[dict] = []
+    for num, h in history.items():
+        u = merged.get(num)
+        if u is None:
+            merged[num] = dict(h)
+            discrepancies.append({
+                "store": num, "unit_name": h["unit_name"], "field": "missing",
+                "primary": "not on report",
+                "history": f"{h['earliest_open_text'] or '—'} – "
+                           f"{h['latest_close_text'] or '—'}",
+            })
+            continue
+        if h["earliest_open"] is not None and (
+                u["earliest_open"] is None
+                or h["earliest_open"] < u["earliest_open"] - tolerance):
+            discrepancies.append({
+                "store": num, "unit_name": u["unit_name"], "field": "open",
+                "primary": u["earliest_open_text"] or "—",
+                "history": h["earliest_open_text"],
+            })
+            u["earliest_open"] = h["earliest_open"]
+            u["earliest_open_text"] = h["earliest_open_text"]
+        if h["latest_close"] is not None and (
+                u["latest_close"] is None
+                or h["latest_close"] > u["latest_close"] + tolerance):
+            discrepancies.append({
+                "store": num, "unit_name": u["unit_name"], "field": "close",
+                "primary": u["latest_close_text"] or "—",
+                "history": h["latest_close_text"],
+            })
+            u["latest_close"] = h["latest_close"]
+            u["latest_close_text"] = h["latest_close_text"]
+    return merged, discrepancies
+
+
+def diff_flags(before: list[dict], after: list[dict]) -> tuple[list[dict], list[dict]]:
+    """(removed, added) between two flag lists, keyed on (store, issue)."""
+    key = lambda f: (str(f["store"]), f["issue"])
+    before_keys = {key(f) for f in before}
+    after_keys = {key(f) for f in after}
+    removed = [f for f in before if key(f) not in after_keys]
+    added = [f for f in after if key(f) not in before_keys]
+    return removed, added
+
+
 def evaluate_company(company: dict, till_rows: list[dict],
-                     business_date: date) -> tuple[list[dict], list[str]]:
+                     business_date: date,
+                     units: dict[str, dict] | None = None,
+                     ) -> tuple[list[dict], list[str]]:
     """Returns (flags, notes).
 
     flags: [{store, name, issue, expected, actual, minutes_off}]
       issue in {"LATE OPEN", "EARLY CLOSE", "NO TILL DATA"}
     notes: non-fatal oddities (report units not in config, etc.)
+
+    ``units`` (per-store windows, e.g. after cross_check_units) takes the
+    place of aggregating ``till_rows`` when given.
     """
     grace = int(company.get("grace_minutes", 15))
     # Closing gets its own (stricter) grace: tills normally close at or after
     # the posted close during closing procedures, so early is early.
     close_grace = int(company.get("close_grace_minutes", 0))
     day_key = WEEKDAY_KEYS[business_date.weekday()]
-    units = aggregate_units(till_rows)
+    if units is None:
+        units = aggregate_units(till_rows)
     flags: list[dict] = []
     notes: list[str] = []
 
