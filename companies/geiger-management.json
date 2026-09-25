@@ -509,31 +509,31 @@
       "timezone": "America/Los_Angeles",
       "hours": {
         "mon": {
-          "open": "06:00",
+          "open": "05:00",
           "close": "00:00"
         },
         "tue": {
-          "open": "06:00",
+          "open": "05:00",
           "close": "00:00"
         },
         "wed": {
-          "open": "06:00",
+          "open": "05:00",
           "close": "00:00"
         },
         "thu": {
-          "open": "06:00",
+          "open": "05:00",
           "close": "00:00"
         },
         "fri": {
-          "open": "06:00",
+          "open": "05:00",
           "close": "00:00"
         },
         "sat": {
-          "open": "06:00",
+          "open": "05:00",
           "close": "00:00"
         },
         "sun": {
-          "open": "06:00",
+          "open": "05:00",
           "close": "00:00"
         }
       },

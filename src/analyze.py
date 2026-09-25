@@ -2,13 +2,20 @@
 
 Times on the report belong to a single business day: a till closed at
 12:03 AM on business date 07/02 actually closed after midnight (calendar
-07/03). Any time earlier than DAY_ROLLOVER_HOUR is treated as next-day.
+07/03). Where a day "rolls over" is decided per store from its posted hours:
+the midpoint between that day's close and the next day's open. Earlier than
+that is the tail of the business day (a late close, a closer clocking out);
+later is the next morning's crew arriving. A fixed 4 AM cutoff once read a
+3:52 AM opener punch at #12622 (5 AM open) as the following day, so the
+MANAGER LATE IN check reported no manager until 2 PM. The fixed hour is
+kept only as the fallback for stores without usable hours (closed, 24h).
 """
 
 import re
 from datetime import date, datetime
 
-DAY_ROLLOVER_HOUR = 4  # times before 4 AM belong to the tail of the business day
+DAY_ROLLOVER_HOUR = 4  # fallback rollover when a store's hours can't decide
+DEFAULT_ROLLOVER = DAY_ROLLOVER_HOUR * 60
 
 WEEKDAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 
@@ -17,9 +24,11 @@ class ConfigError(ValueError):
     pass
 
 
-def _parse_report_time(text: str) -> float | None:
+def _parse_report_time(text: str,
+                       rollover: float = DEFAULT_ROLLOVER) -> float | None:
     """'06:28:27 AM' or '5:05 PM' -> minutes since business-day midnight
-    (times before the rollover hour count as next-day).
+    (times before ``rollover`` minutes count as next-day; see
+    store_rollovers for the per-store value).
 
     Seconds count as fractional minutes — 6:15:08 against a 6:00 open with
     15 min grace IS more than 15 minutes late. Truncating seconds once let
@@ -30,13 +39,15 @@ def _parse_report_time(text: str) -> float | None:
     fmt = "%I:%M:%S %p" if text.count(":") == 2 else "%I:%M %p"
     dt = datetime.strptime(text, fmt)
     minutes = dt.hour * 60 + dt.minute + dt.second / 60
-    if dt.hour < DAY_ROLLOVER_HOUR:
+    if minutes < rollover:
         minutes += 24 * 60
     return minutes
 
 
 def _parse_config_time(text: str, *, is_close: bool = False) -> int:
-    """'06:00' / '23:30' / '00:30' -> minutes; close times past midnight wrap."""
+    """'06:00' / '23:30' / '00:30' -> minutes; close times past midnight wrap.
+    (Posted closes are never in the small hours *before* the open, so the
+    fixed hour is a safe wrap point for config times.)"""
     m = re.fullmatch(r"(\d{1,2}):(\d{2})", text.strip())
     if not m:
         raise ConfigError(f"bad time in config: {text!r} (expected HH:MM)")
@@ -44,6 +55,43 @@ def _parse_config_time(text: str, *, is_close: bool = False) -> int:
     if is_close and int(m.group(1)) < DAY_ROLLOVER_HOUR:
         minutes += 24 * 60
     return minutes
+
+
+def _day_hours(store: dict, day_key: str) -> dict | None:
+    """The store's {open, close} for a weekday, or None when closed / 24h /
+    unconfigured."""
+    hours = (store.get("hours") or {}).get(day_key)
+    if hours in (None, "closed", "24h") or store.get("open_24h"):
+        return None
+    return hours
+
+
+def store_rollover(store: dict, business_date: date) -> float:
+    """Minutes past midnight where this store's business day ends: halfway
+    between the posted close and the next morning's posted open. A report
+    time earlier than this belongs to the tail of the business day.
+
+    #12622 closes 12:00 AM and opens 5:00 AM -> 2:30 AM. #13959 on a Friday
+    closes 1:00 AM and opens 6:00 AM Saturday -> 3:30 AM. Falls back to
+    DEFAULT_ROLLOVER when either side is closed / 24h / missing."""
+    today = _day_hours(store, WEEKDAY_KEYS[business_date.weekday()])
+    tomorrow = _day_hours(store, WEEKDAY_KEYS[(business_date.weekday() + 1) % 7])
+    if today is None:
+        return DEFAULT_ROLLOVER
+    try:
+        close = _parse_config_time(today["close"], is_close=True)
+        open_next = _parse_config_time((tomorrow or today)["open"]) + 24 * 60
+    except ConfigError:
+        return DEFAULT_ROLLOVER
+    if open_next <= close:
+        return DEFAULT_ROLLOVER
+    return (close + open_next) / 2 - 24 * 60
+
+
+def store_rollovers(company: dict, business_date: date) -> dict[str, float]:
+    """{store_id: rollover minutes} for every store in the config."""
+    return {str(s["id"]): store_rollover(s, business_date)
+            for s in company["stores"]}
 
 
 def fmt_minutes(minutes: float) -> str:
@@ -61,17 +109,22 @@ def store_number(unit_name: str) -> str | None:
     return m.group(1) if m else None
 
 
-def aggregate_units(till_rows: list[dict]) -> dict[str, dict]:
+def aggregate_units(till_rows: list[dict],
+                    rollovers: dict[str, float] | None = None) -> dict[str, dict]:
     """Raw drawer rows -> {store_number: {earliest_open, latest_close,
     earliest_open_text, latest_close_text, unit_name}}. The *_text fields
-    keep the report's exact second-level timestamps for display."""
+    keep the report's exact second-level timestamps for display.
+    ``rollovers`` (from store_rollovers) decides per store which small-hours
+    times are past midnight; stores not in it use the default."""
     units: dict[str, dict] = {}
+    rollovers = rollovers or {}
     for row in till_rows:
         num = store_number(row["unit_name"])
         if num is None:
             continue
-        opened = _parse_report_time(row["opened"])
-        closed = _parse_report_time(row["closed"])
+        rollover = rollovers.get(num, DEFAULT_ROLLOVER)
+        opened = _parse_report_time(row["opened"], rollover)
+        closed = _parse_report_time(row["closed"], rollover)
         u = units.setdefault(num, {"unit_name": row["unit_name"],
                                    "earliest_open": None, "latest_close": None,
                                    "earliest_open_text": "", "latest_close_text": ""})
@@ -172,7 +225,7 @@ def evaluate_company(company: dict, till_rows: list[dict],
     close_grace = int(company.get("close_grace_minutes", 0))
     day_key = WEEKDAY_KEYS[business_date.weekday()]
     if units is None:
-        units = aggregate_units(till_rows)
+        units = aggregate_units(till_rows, store_rollovers(company, business_date))
     flags: list[dict] = []
     notes: list[str] = []
 
@@ -257,17 +310,20 @@ def _display_name(employee: str) -> str:
     return name
 
 
-def _manager_shifts_by_store(shifts: list[dict],
-                             manager_titles: list[str]) -> dict[str, list[dict]]:
+def _manager_shifts_by_store(shifts: list[dict], manager_titles: list[str],
+                             rollovers: dict[str, float] | None = None,
+                             ) -> dict[str, list[dict]]:
     by_store: dict[str, list[dict]] = {}
+    rollovers = rollovers or {}
     for s in shifts:
         num = store_number(s["unit_name"])
         if num is None or not _is_manager(s.get("title", ""), manager_titles):
             continue
+        rollover = rollovers.get(num, DEFAULT_ROLLOVER)
         by_store.setdefault(num, []).append({
             **s,
-            "in_min": _parse_report_time(s.get("clock_in", "")),
-            "out_min": _parse_report_time(s.get("clock_out", "")),
+            "in_min": _parse_report_time(s.get("clock_in", ""), rollover),
+            "out_min": _parse_report_time(s.get("clock_out", ""), rollover),
         })
     return by_store
 
@@ -284,7 +340,8 @@ def evaluate_manager_arrivals(company: dict, shifts: list[dict],
                       company.get("manager_titles", DEFAULT_MANAGER_TITLES)]
     lead = int(company.get("manager_open_lead_minutes", 0))
     day_key = WEEKDAY_KEYS[business_date.weekday()]
-    by_store = _manager_shifts_by_store(shifts, manager_titles)
+    by_store = _manager_shifts_by_store(
+        shifts, manager_titles, store_rollovers(company, business_date))
 
     flags: list[dict] = []
     for store in company["stores"]:
@@ -343,15 +400,18 @@ def condense_flags(flags: list[dict]) -> list[dict]:
 
 
 def attach_managers(flags: list[dict], shifts: list[dict],
-                    company: dict) -> None:
+                    company: dict, business_date: date | None = None) -> None:
     """For each LATE OPEN / EARLY CLOSE flag, name the opening manager
     (first manager clock-in) or closing manager (last manager clock-out).
 
     Mutates each flag: adds 'manager' (display string) when found.
+    ``business_date`` picks each store's rollover; without it the default
+    cutoff applies.
     """
     manager_titles = [m.lower() for m in
                       company.get("manager_titles", DEFAULT_MANAGER_TITLES)]
-    by_store = _manager_shifts_by_store(shifts, manager_titles)
+    rollovers = store_rollovers(company, business_date) if business_date else None
+    by_store = _manager_shifts_by_store(shifts, manager_titles, rollovers)
 
     for flag in flags:
         mgr_shifts = by_store.get(str(flag["store"]), [])

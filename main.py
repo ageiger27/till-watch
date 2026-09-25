@@ -22,10 +22,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from src.analyze import (WEEKDAY_KEYS, _parse_report_time, attach_managers,
-                         condense_flags, cross_check_units, diff_flags,
-                         evaluate_company, evaluate_manager_arrivals,
-                         fmt_minutes, aggregate_units, store_number)
+from src.analyze import (DEFAULT_ROLLOVER, WEEKDAY_KEYS, _parse_report_time,
+                         attach_managers, condense_flags, cross_check_units,
+                         diff_flags, evaluate_company,
+                         evaluate_manager_arrivals, fmt_minutes,
+                         aggregate_units, store_number, store_rollovers)
 from src.emailer import (DRY_RUN, GMAIL_USER, GMAIL_APP_PASSWORD,
                          build_cross_check_email,
                          build_cross_check_failure_email,
@@ -140,10 +141,11 @@ def process_company(company: dict) -> bool:
             till_rows = portal.fetch_till_rows(business_date)
             history_rows, history_err = pull_till_history(portal, company, business_date)
             expected = expected_store_ids(company, business_date)
+            rollovers = store_rollovers(company, business_date)  # after live hours
             for attempt in range(1, MAX_DATA_RETRIES + 1):
                 # a store on either report has posted; only wait for the rest
-                missing = (expected - set(aggregate_units(till_rows))
-                           - set(aggregate_units(history_rows or [])))
+                missing = (expected - set(aggregate_units(till_rows, rollovers))
+                           - set(aggregate_units(history_rows or [], rollovers)))
                 if not missing:
                     break
                 print(f"  no till data yet for {sorted(missing, key=int)} — "
@@ -153,12 +155,12 @@ def process_company(company: dict) -> bool:
                 till_rows = portal.fetch_till_rows(business_date)
                 history_rows, history_err = pull_till_history(portal, company, business_date)
             print(f"  report rows: {len(till_rows)}")
-            units_primary = aggregate_units(till_rows)
+            units_primary = aggregate_units(till_rows, rollovers)
             units, discrepancies = units_primary, []
             if history_rows is not None:
                 print(f"  till history rows: {len(history_rows)}")
                 units, discrepancies = cross_check_units(
-                    units_primary, aggregate_units(history_rows))
+                    units_primary, aggregate_units(history_rows, rollovers))
                 company["_till_history_checked"] = True
             changed = {d["store"] for d in discrepancies}
             for num in sorted(units, key=lambda n: int(n)):
@@ -199,7 +201,7 @@ def process_company(company: dict) -> bool:
                 try:
                     shifts = portal.fetch_timecard_shifts(business_date)
                     print(f"  timecard shifts: {len(shifts)}")
-                    attach_managers(flags, shifts, company)
+                    attach_managers(flags, shifts, company, business_date)
                     flags.extend(evaluate_manager_arrivals(
                         company, shifts, business_date, units))
                     flags = condense_flags(flags)
@@ -312,6 +314,7 @@ def backfill_timecards(business_date, store_id: str | None) -> bool:
         print(f"  timecard shifts: {len(shifts)}")
 
         manager_titles = [m.lower() for m in company.get("manager_titles", [])]
+        rollovers = store_rollovers(company, business_date)
         by_store: dict[str, list[dict]] = {}
         for s in shifts:
             by_store.setdefault(store_number(s["unit_name"]) or "?", []).append(s)
@@ -320,8 +323,9 @@ def backfill_timecards(business_date, store_id: str | None) -> bool:
             if not store_id:  # company-wide: managers only, keep it readable
                 rows = [r for r in rows
                         if any(m in r["title"].lower() for m in manager_titles)]
-            print(f"  #{sid}:")
-            for r in sorted(rows, key=lambda r: _parse_report_time(r["clock_in"]) or 0):
+            rollover = rollovers.get(sid, DEFAULT_ROLLOVER)
+            print(f"  #{sid} (day rolls over at {fmt_minutes(rollover)}):")
+            for r in sorted(rows, key=lambda r: _parse_report_time(r["clock_in"], rollover) or 0):
                 print(f"    {r['clock_in']:>9} - {r['clock_out'] or '—':>9}  "
                       f"{r['title']:<26} {r['employee']}")
 
@@ -373,8 +377,9 @@ def backfill_tills(business_date, store_id: str | None) -> bool:
             print("  no Till History: " + (history_err or
                   "add till_history_report_id to the company config"))
             ok = ok and not history_err
-        primary = aggregate_units(till_rows)
-        history = aggregate_units(history_rows or [])
+        rollovers = store_rollovers(company, business_date)
+        primary = aggregate_units(till_rows, rollovers)
+        history = aggregate_units(history_rows or [], rollovers)
         _, discrepancies = cross_check_units(primary, history)
         changed = {d["store"] for d in discrepancies}
         print(f"  {'store':>7}  {'Earliest/Latest report':^25}  {'Till History':^25}")

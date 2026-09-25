@@ -22,8 +22,10 @@ in `companies/` plus two GitHub secrets.
    `getBuildStatus` → `getPage`) — no viewer scraping, no Excel export. The
    report pages come back as JSON "bricks" that we reconstruct into rows.
 3. `src/analyze.py` aggregates drawer rows to per-store earliest open / latest
-   close (times before 4 AM count as past-midnight of the same business day)
-   and compares against the store's hours for that weekday, with a grace
+   close (small-hours times count as past-midnight of the same business day
+   up to each store's rollover: the midpoint between its posted close and the
+   next morning's open, so a 5 AM store rolls over at 2:30 AM and a 1 AM
+   closer at 3:30 AM) and compares against the store's hours for that weekday, with a grace
    period (default 15 min). Stores missing from the report entirely are
    flagged **NO TILL DATA** — the worst case.
    With a `till_history_report_id` configured, the **Till History** report is
